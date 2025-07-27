@@ -3,10 +3,7 @@ const router = express.Router();
 const Shop = require('../models/Shop');
 const upload = require('../middleware/upload');
 
-const ensureAuthenticated = (req, res, next) => {
-  if (req.isAuthenticated()) return next();
-  res.status(401).json({ error: 'Not authenticated' });
-};
+const { ensureAuthenticated } = require('../middleware/auth');
 
 // Create basic shop
 router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (req, res) => {

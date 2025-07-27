@@ -4,10 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Shop = require('../models/Shop');
-const ensureAuthenticated = (req, res, next) => {
-  if (req.isAuthenticated()) return next();
-  res.status(401).json({ error: 'Not authenticated' });
-};
+const { ensureAuthenticated } = require('../middleware/auth');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({

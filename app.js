@@ -21,6 +21,7 @@ const shopRoutes = require('./routes/shop');
 const shopWizardRoutes = require('./routes/shop-wizard');
 const instituteRoutes = require('./routes/institute');
 const feedRoutes = require('./routes/feed');
+const friendsRoutes = require('./routes/friends');
 const fs = require('fs');
 
 // mongodb+srv://mesum357:pDliM118811@cluster0.h3knh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
@@ -336,6 +337,7 @@ app.use('/api/shop', shopRoutes);
 app.use('/api/shop-wizard', shopWizardRoutes);
 app.use('/api/institute', instituteRoutes);
 app.use('/api/feed', feedRoutes);
+app.use('/api/friends', friendsRoutes);
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');

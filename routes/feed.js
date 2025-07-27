@@ -8,11 +8,7 @@ const Comment = require('../models/Comment');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 
-// Auth middleware (assume exists in your project)
-const ensureAuthenticated = (req, res, next) => {
-  if (req.isAuthenticated && req.isAuthenticated()) return next();
-  res.status(401).json({ error: 'Not authenticated' });
-};
+const { ensureAuthenticated } = require('../middleware/auth');
 
 // Multer config for image uploads
 const storage = multer.diskStorage({

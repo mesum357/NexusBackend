@@ -5,14 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const Institute = require('../models/Institute');
 const Review = require('../models/Review');
-const ensureAuthenticated = (req, res, next) => {
-  console.log('ensureAuthenticated middleware called');
-  console.log('req.isAuthenticated():', req.isAuthenticated());
-  console.log('req.user:', req.user);
-  if (req.isAuthenticated()) return next();
-  console.log('Authentication failed, sending 401');
-  res.status(401).json({ error: 'Not authenticated' });
-};
+const { ensureAuthenticated } = require('../middleware/auth');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
