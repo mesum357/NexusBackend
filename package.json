@@ -1,0 +1,33 @@
+{
+  "name": "shop-backend",
+  "version": "1.0.0",
+  "description": "Backend API for shop management",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
+    "multer": "^1.4.5-lts.1",
+    "cors": "^2.8.5",
+    "passport": "^0.6.0",
+    "passport-local": "^1.0.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-local-mongoose": "^7.1.2",
+    "mongoose-findorcreate": "^3.0.0",
+    "express-session": "^1.17.3",
+    "body-parser": "^1.20.2",
+    "nodemailer": "^6.9.4",
+    "crypto": "^1.0.1",
+    "socket.io": "^4.7.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["shop", "api", "backend"],
+  "author": "",
+  "license": "MIT"
+} 
