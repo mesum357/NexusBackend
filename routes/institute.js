@@ -230,6 +230,17 @@ router.get('/all', async (req, res) => {
   }
 });
 
+// Get institutes owned by current user
+router.get('/my-institutes', ensureAuthenticated, async (req, res) => {
+  try {
+    const institutes = await Institute.find({ owner: req.user._id }).sort({ createdAt: -1 });
+    res.json({ institutes });
+  } catch (error) {
+    console.error('Error fetching user institutes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get single institute by ID
 router.get('/:id', async (req, res) => {
   try {

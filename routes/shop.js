@@ -1,9 +1,45 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const Shop = require('../models/Shop');
-const upload = require('../middleware/upload');
-
 const { ensureAuthenticated } = require('../middleware/auth');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadsDir = path.join(__dirname, '..', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|gif|webp/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+
+  if (mimetype && extname) {
+    return cb(null, true);
+  } else {
+    cb(new Error('Only image files are allowed!'));
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: fileFilter
+});
 
 // Create basic shop
 router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (req, res) => {
@@ -75,17 +111,99 @@ router.get('/my-shops', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Get single shop by ID
-router.get('/:id', async (req, res) => {
+// Get shop by ID
+router.get('/:shopId', async (req, res) => {
   try {
-    const shop = await Shop.findById(req.params.id);
+    const shop = await Shop.findById(req.params.shopId);
     if (!shop) {
       return res.status(404).json({ error: 'Shop not found' });
     }
     res.json({ shop });
   } catch (error) {
     console.error('Error fetching shop:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch shop' });
+  }
+});
+
+// Upload gallery images
+router.post('/:shopId/gallery', ensureAuthenticated, upload.array('galleryImages', 10), async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    // Check if user is the shop owner
+    if (shop.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Only shop owner can upload gallery images' });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No images uploaded' });
+    }
+
+    // Process uploaded images
+    const newGalleryImages = req.files.map(file => `/uploads/${file.filename}`);
+    
+    // Add new images to existing gallery
+    const updatedGallery = [...(shop.gallery || []), ...newGalleryImages];
+    
+    // Update shop with new gallery
+    shop.gallery = updatedGallery;
+    await shop.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Gallery images uploaded successfully',
+      gallery: updatedGallery
+    });
+
+  } catch (error) {
+    console.error('Error uploading gallery images:', error);
+    res.status(500).json({ error: 'Failed to upload gallery images' });
+  }
+});
+
+// Delete gallery image
+router.delete('/:shopId/gallery/:imageIndex', ensureAuthenticated, async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    // Check if user is the shop owner
+    if (shop.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Only shop owner can delete gallery images' });
+    }
+
+    const imageIndex = parseInt(req.params.imageIndex);
+    if (imageIndex < 0 || imageIndex >= (shop.gallery || []).length) {
+      return res.status(400).json({ error: 'Invalid image index' });
+    }
+
+    // Get the image path to delete the file
+    const imagePath = shop.gallery[imageIndex];
+    if (imagePath) {
+      const fullPath = path.join(__dirname, '..', imagePath);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    }
+
+    // Remove image from gallery array
+    shop.gallery.splice(imageIndex, 1);
+    await shop.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Gallery image deleted successfully',
+      gallery: shop.gallery
+    });
+
+  } catch (error) {
+    console.error('Error deleting gallery image:', error);
+    res.status(500).json({ error: 'Failed to delete gallery image' });
   }
 });
 

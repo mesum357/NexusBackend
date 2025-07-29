@@ -45,6 +45,7 @@ const upload = multer({
 router.post('/create', ensureAuthenticated, upload.fields([
   { name: 'shopLogo', maxCount: 1 },
   { name: 'shopBanner', maxCount: 1 },
+  { name: 'ownerProfilePhoto', maxCount: 1 },
   { name: 'productImages', maxCount: 10 }
 ]), async (req, res) => {
   try {
@@ -89,6 +90,7 @@ router.post('/create', ensureAuthenticated, upload.fields([
     // Handle file uploads
     let shopLogoPath = '';
     let shopBannerPath = '';
+    let ownerProfilePath = '';
 
     if (req.files.shopLogo) {
       shopLogoPath = `/uploads/${req.files.shopLogo[0].filename}`;
@@ -96,6 +98,10 @@ router.post('/create', ensureAuthenticated, upload.fields([
 
     if (req.files.shopBanner) {
       shopBannerPath = `/uploads/${req.files.shopBanner[0].filename}`;
+    }
+
+    if (req.files.ownerProfilePhoto) {
+      ownerProfilePath = `/uploads/${req.files.ownerProfilePhoto[0].filename}`;
     }
 
     // Process product images
@@ -122,6 +128,7 @@ router.post('/create', ensureAuthenticated, upload.fields([
       categories: parsedCategories,
       shopLogo: shopLogoPath,
       shopBanner: shopBannerPath,
+      ownerProfilePhoto: ownerProfilePath,
       websiteUrl: websiteUrl || '',
       facebookUrl: facebookUrl || '',
       instagramHandle: instagramHandle || '',
@@ -131,7 +138,7 @@ router.post('/create', ensureAuthenticated, upload.fields([
       totalReviews: 0,
       owner: req.user._id,
       ownerName: req.user.username || req.user.email || '',
-      ownerDp: req.user.profileImage || ''
+      ownerDp: ownerProfilePath || req.user.profileImage || ''
     };
 
     console.log('Creating shop with data:', shopData);

@@ -21,6 +21,8 @@ const shopSchema = new mongoose.Schema({
   // Images
   shopLogo: { type: String },
   shopBanner: { type: String },
+  ownerProfilePhoto: { type: String },
+  gallery: [{ type: String }], // Array of gallery image paths
   
   // Social & Contact
   websiteUrl: { type: String },
