@@ -380,7 +380,7 @@ router.delete('/:id', ensureAuthenticated, async (req, res) => {
 router.get('/:id/reviews', async (req, res) => {
   try {
     const reviews = await Review.find({ institute: req.params.id })
-      .populate('reviewer', 'username email')
+      .populate('reviewer', 'username fullName email profileImage city')
       .sort({ createdAt: -1 });
     
     res.json({ reviews });
@@ -433,7 +433,7 @@ router.post('/:id/reviews', ensureAuthenticated, async (req, res) => {
     }
     
     // Populate reviewer info for response
-    await review.populate('reviewer', 'username email');
+    await review.populate('reviewer', 'username fullName email profileImage city');
     
     res.status(201).json({
       success: true,
@@ -474,7 +474,7 @@ router.put('/:id/reviews/:reviewId', ensureAuthenticated, async (req, res) => {
       await institute.save();
     }
     
-    await review.populate('reviewer', 'username email');
+    await review.populate('reviewer', 'username fullName email profileImage city');
     
     res.json({
       success: true,

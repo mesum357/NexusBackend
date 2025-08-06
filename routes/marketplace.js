@@ -90,7 +90,7 @@ router.get('/', async (req, res) => {
     const skip = (page - 1) * limit;
 
     const products = await Product.find(filter)
-      .populate('owner', 'username email profileImage')
+      .populate('owner', 'username fullName email profileImage city')
       .sort(sort)
       .skip(skip)
       .limit(Number(limit));
@@ -117,7 +117,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
-      .populate('owner', 'username email profileImage city');
+      .populate('owner', 'username fullName email profileImage city');
 
     if (!product) {
       return res.status(404).json({ error: 'Product not found' });
@@ -197,7 +197,7 @@ router.post('/', ensureAuthenticated, upload.array('images', 10), async (req, re
       specifications: parsedSpecifications,
       contactPreference: contactPreference || 'both',
       owner: req.user._id,
-      ownerName: req.user.username || req.user.fullName || req.user.email,
+      ownerName: req.user.fullName || req.user.username || req.user.email,
       ownerPhone: ownerPhone || req.user.phone || '',
       ownerEmail: ownerEmail || req.user.email || ''
     });
@@ -277,7 +277,7 @@ router.put('/:id', ensureAuthenticated, upload.array('images', 10), async (req, 
       req.params.id,
       updateData,
       { new: true }
-    ).populate('owner', 'username email profileImage');
+    ).populate('owner', 'username fullName email profileImage city');
 
     res.json({ product: updatedProduct });
   } catch (error) {

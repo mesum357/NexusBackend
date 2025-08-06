@@ -196,7 +196,7 @@ router.post('/comment/:id/like', ensureAuthenticated, async (req, res) => {
 router.get('/post/:id/comments', async (req, res) => {
   try {
     const comments = await Comment.find({ post: req.params.id })
-      .populate('user', 'username email profileImage')
+      .populate('user', 'username fullName email profileImage city')
       .sort({ createdAt: 1 });
     res.json({ comments });
   } catch (error) {
@@ -287,7 +287,7 @@ router.get('/notifications', ensureAuthenticated, async (req, res) => {
   try {
     const notifications = await Notification.find({ user: req.user._id })
       .sort({ createdAt: -1 })
-      .populate('fromUser', 'username profileImage')
+      .populate('fromUser', 'username fullName email profileImage city')
       .populate('post', 'content')
       .populate('comment', 'content');
     res.json({ notifications });
