@@ -316,6 +316,15 @@ app.get('/me', (req, res) => {
   }
 });
 
+// Add the /api/auth/me endpoint that the frontend expects
+app.get('/api/auth/me', (req, res) => {
+  if (req.isAuthenticated()) {
+    res.json({ user: req.user });
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
+});
+
 app.get('/', (req, res) => {
     res.send('Hello World');
 });

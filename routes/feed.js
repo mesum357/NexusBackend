@@ -29,11 +29,23 @@ const upload = multer({ storage });
 // Create a post
 router.post('/post', ensureAuthenticated, upload.single('image'), async (req, res) => {
   try {
-    const { content } = req.body;
+    const { content, city, location, hashtags } = req.body;
     if (!content) return res.status(400).json({ error: 'Content is required' });
+    
+    // Parse hashtags if provided
+    let hashtagsArray = [];
+    if (hashtags) {
+      hashtagsArray = hashtags.split(' ')
+        .filter(tag => tag.startsWith('#'))
+        .map(tag => tag.trim());
+    }
+    
     const post = new Post({
       user: req.user._id,
       content,
+      city: city || undefined,
+      location: location || undefined,
+      hashtags: hashtagsArray,
       image: req.file ? `/uploads/${req.file.filename}` : undefined
     });
     await post.save();
