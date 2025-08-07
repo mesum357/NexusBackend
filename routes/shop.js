@@ -125,6 +125,143 @@ router.get('/:shopId', async (req, res) => {
   }
 });
 
+// Update shop
+router.put('/:shopId', ensureAuthenticated, upload.fields([
+  { name: 'shopLogo', maxCount: 1 },
+  { name: 'shopBanner', maxCount: 1 },
+  { name: 'ownerProfilePhoto', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    // Check if user is the shop owner
+    if (shop.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Only shop owner can update shop' });
+    }
+
+    const {
+      shopName,
+      city,
+      shopType,
+      shopDescription,
+      categories,
+      whatsappNumber,
+      facebookUrl,
+      instagramHandle,
+      websiteUrl
+    } = req.body;
+
+    // Update shop fields
+    if (shopName) shop.shopName = shopName;
+    if (city) shop.city = city;
+    if (shopType) shop.shopType = shopType;
+    if (shopDescription) shop.shopDescription = shopDescription;
+    if (categories) {
+      try {
+        const parsedCategories = JSON.parse(categories);
+        shop.categories = Array.isArray(parsedCategories) ? parsedCategories : [parsedCategories];
+      } catch (error) {
+        shop.categories = Array.isArray(categories) ? categories : [categories];
+      }
+    }
+    if (whatsappNumber) shop.whatsappNumber = whatsappNumber;
+    if (facebookUrl) shop.facebookUrl = facebookUrl;
+    if (instagramHandle) shop.instagramHandle = instagramHandle;
+    if (websiteUrl) shop.websiteUrl = websiteUrl;
+
+    // Handle file uploads
+    if (req.files) {
+      if (req.files.shopLogo) {
+        // Delete old logo if exists
+        if (shop.shopLogo) {
+          const oldLogoPath = path.join(__dirname, '..', shop.shopLogo);
+          if (fs.existsSync(oldLogoPath)) {
+            fs.unlinkSync(oldLogoPath);
+          }
+        }
+        shop.shopLogo = `/uploads/${req.files.shopLogo[0].filename}`;
+      }
+      if (req.files.shopBanner) {
+        // Delete old banner if exists
+        if (shop.shopBanner) {
+          const oldBannerPath = path.join(__dirname, '..', shop.shopBanner);
+          if (fs.existsSync(oldBannerPath)) {
+            fs.unlinkSync(oldBannerPath);
+          }
+        }
+        shop.shopBanner = `/uploads/${req.files.shopBanner[0].filename}`;
+      }
+      if (req.files.ownerProfilePhoto) {
+        // Delete old profile photo if exists
+        if (shop.ownerProfilePhoto) {
+          const oldProfilePath = path.join(__dirname, '..', shop.ownerProfilePhoto);
+          if (fs.existsSync(oldProfilePath)) {
+            fs.unlinkSync(oldProfilePath);
+          }
+        }
+        shop.ownerProfilePhoto = `/uploads/${req.files.ownerProfilePhoto[0].filename}`;
+      }
+    }
+
+    await shop.save();
+    res.json({ message: 'Shop updated successfully', shop });
+  } catch (error) {
+    console.error('Error updating shop:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete shop
+router.delete('/:shopId', ensureAuthenticated, async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    // Check if user is the shop owner
+    if (shop.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Only shop owner can delete shop' });
+    }
+
+    // Delete associated files
+    const filesToDelete = [
+      shop.shopLogo,
+      shop.shopBanner,
+      shop.ownerProfilePhoto,
+      ...(shop.gallery || [])
+    ].filter(Boolean);
+
+    filesToDelete.forEach(filePath => {
+      const fullPath = path.join(__dirname, '..', filePath);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    });
+
+    // Delete shop products images
+    if (shop.products && shop.products.length > 0) {
+      shop.products.forEach(product => {
+        if (product.image) {
+          const productImagePath = path.join(__dirname, '..', product.image);
+          if (fs.existsSync(productImagePath)) {
+            fs.unlinkSync(productImagePath);
+          }
+        }
+      });
+    }
+
+    await Shop.findByIdAndDelete(req.params.shopId);
+    res.json({ message: 'Shop deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting shop:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Upload gallery images
 router.post('/:shopId/gallery', ensureAuthenticated, upload.array('galleryImages', 10), async (req, res) => {
   try {
