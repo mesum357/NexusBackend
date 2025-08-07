@@ -69,6 +69,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // MONGOOSE
+// The mongfooos options are the
 const mongooseOptions = {
     useNewUrlParser: true,
     useUnifiedTopology: true
@@ -256,6 +257,8 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
     });
 });
 
+
+
 app.get('/verify-email', async (req, res) => {
     const { token } = req.query;
     if (!token) {
@@ -307,7 +310,7 @@ app.get('/logout', function(req, res, next) {
         res.redirect('/');
     });
 });
-
+const abcv = 45
 app.get('/me', (req, res) => {
   if (req.isAuthenticated()) {
     res.json({ user: req.user });
