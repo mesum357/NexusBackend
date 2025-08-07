@@ -321,17 +321,29 @@ router.post('/notifications/read', ensureAuthenticated, async (req, res) => {
 // Get trending hashtags
 router.get('/trending-hashtags', async (req, res) => {
   try {
-    // Extract hashtags from posts and count their occurrences
-    const posts = await Post.find({}, 'content');
+    // Get posts with hashtags field and content
+    const posts = await Post.find({}, 'content hashtags');
     
     const hashtagCounts = {};
     const hashtagRegex = /#(\w+)/g;
     
     posts.forEach(post => {
-      let match;
-      while ((match = hashtagRegex.exec(post.content)) !== null) {
-        const hashtag = match[1].toLowerCase();
-        hashtagCounts[hashtag] = (hashtagCounts[hashtag] || 0) + 1;
+      // Count hashtags from the dedicated hashtags field
+      if (post.hashtags && Array.isArray(post.hashtags)) {
+        post.hashtags.forEach(hashtag => {
+          // Remove # if present and convert to lowercase
+          const cleanHashtag = hashtag.replace(/^#/, '').toLowerCase();
+          hashtagCounts[cleanHashtag] = (hashtagCounts[cleanHashtag] || 0) + 1;
+        });
+      }
+      
+      // Also count hashtags from post content (for backward compatibility)
+      if (post.content) {
+        let match;
+        while ((match = hashtagRegex.exec(post.content)) !== null) {
+          const hashtag = match[1].toLowerCase();
+          hashtagCounts[hashtag] = (hashtagCounts[hashtag] || 0) + 1;
+        }
       }
     });
     
