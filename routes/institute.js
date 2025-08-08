@@ -6,22 +6,9 @@ const fs = require('fs');
 const Institute = require('../models/Institute');
 const Review = require('../models/Review');
 const { ensureAuthenticated } = require('../middleware/auth');
+const { upload, cloudinary } = require('../middleware/cloudinary');
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadsDir = path.join(__dirname, '..', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
+// File filter for image uploads
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -34,8 +21,9 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-const upload = multer({
-  storage: storage,
+// Configure upload with cloudinary and file filter
+const uploadWithFilter = multer({
+  storage: upload.storage,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   },
@@ -48,7 +36,7 @@ router.post('/create', (req, res, next) => {
   console.log('User authenticated:', req.isAuthenticated());
   console.log('User:', req.user);
   next();
-}, ensureAuthenticated, upload.fields([
+}, ensureAuthenticated, uploadWithFilter.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'banner', maxCount: 1 },
   { name: 'gallery', maxCount: 10 },
@@ -136,15 +124,15 @@ router.post('/create', (req, res, next) => {
     let galleryPaths = [];
 
     if (req.files.logo) {
-      logoPath = `/uploads/${req.files.logo[0].filename}`;
+      logoPath = req.files.logo[0].path; // Cloudinary URL
     }
 
     if (req.files.banner) {
-      bannerPath = `/uploads/${req.files.banner[0].filename}`;
+      bannerPath = req.files.banner[0].path; // Cloudinary URL
     }
 
     if (req.files.gallery) {
-      galleryPaths = req.files.gallery.map(file => `/uploads/${file.filename}`);
+      galleryPaths = req.files.gallery.map(file => file.path); // Cloudinary URLs
     }
 
     // Process faculty images
@@ -284,13 +272,13 @@ router.put('/:id', ensureAuthenticated, upload.fields([
     }
     // Handle file uploads and update data
     if (req.files && req.files.logo) {
-      institute.logo = `/uploads/${req.files.logo[0].filename}`;
+      institute.logo = req.files.logo[0].path; // Cloudinary URL
     }
     if (req.files && req.files.banner) {
-      institute.banner = `/uploads/${req.files.banner[0].filename}`;
+      institute.banner = req.files.banner[0].path; // Cloudinary URL
     }
     if (req.files && req.files.gallery) {
-      institute.gallery = req.files.gallery.map(file => `/uploads/${file.filename}`);
+      institute.gallery = req.files.gallery.map(file => file.path); // Cloudinary URLs
     }
     // Update other fields
     console.log('Updating institute with body:', req.body)
