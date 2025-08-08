@@ -402,9 +402,11 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
+
+// SERVICES AND ROUTES
 // Serve uploaded images statically
 app.use('/uploads', express.static(uploadsDir));
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-}); 
+});
