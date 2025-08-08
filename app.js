@@ -406,5 +406,5 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(uploadsDir));
 
 app.listen(PORT, () => {
-  console.log(`Server is running ON PORT ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 }); 
