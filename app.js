@@ -26,7 +26,7 @@ const followRoutes = require('./routes/follow');
 const marketplaceRoutes = require('./routes/marketplace');
 const categoryRoutes = require('./routes/categories');
 const fs = require('fs');
-const upload = require('./middleware/upload');
+const { upload } = require('./middleware/cloudinary');
 
 // mongodb+srv://mesum357:pDliM118811@cluster0.h3knh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
