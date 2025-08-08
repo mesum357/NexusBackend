@@ -7,7 +7,7 @@ const courseSchema = new mongoose.Schema({
   duration: { type: String },
   fee: { type: Number },
   category: { type: String },
-}, { _id: false });
+});
 
 // Faculty sub-schema
 const facultySchema = new mongoose.Schema({
@@ -16,7 +16,7 @@ const facultySchema = new mongoose.Schema({
   qualification: { type: String },
   experience: { type: String },
   image: { type: String },
-}, { _id: false });
+});
 
 const instituteSchema = new mongoose.Schema({
   // Basic Information
