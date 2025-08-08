@@ -10,21 +10,15 @@ const Notification = require('../models/Notification');
 
 const { ensureAuthenticated } = require('../middleware/auth');
 
-// Multer config for image uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadsDir = path.join(__dirname, '..', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+const { upload: cloudinaryUpload, cloudinary } = require('../middleware/cloudinary');
+
+// Configure upload with cloudinary
+const upload = multer({
+  storage: cloudinaryUpload.storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
   }
 });
-const upload = multer({ storage });
 
 // Create a post
 router.post('/post', ensureAuthenticated, upload.single('image'), async (req, res) => {
@@ -46,7 +40,7 @@ router.post('/post', ensureAuthenticated, upload.single('image'), async (req, re
       city: city || undefined,
       location: location || undefined,
       hashtags: hashtagsArray,
-      image: req.file ? `/uploads/${req.file.filename}` : undefined
+      image: req.file ? req.file.path : undefined // Cloudinary URL
     });
     await post.save();
     res.status(201).json({ post });
@@ -419,7 +413,7 @@ router.put('/profile/update', ensureAuthenticated, upload.single('profileImage')
 
     // Handle profile image upload
     if (req.file) {
-      user.profileImage = `/uploads/${req.file.filename}`;
+      user.profileImage = req.file.path; // Cloudinary URL
     }
 
     // Update other fields

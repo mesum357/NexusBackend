@@ -5,22 +5,9 @@ const path = require('path');
 const fs = require('fs');
 const Shop = require('../models/Shop');
 const { ensureAuthenticated } = require('../middleware/auth');
+const { upload: cloudinaryUpload, cloudinary } = require('../middleware/cloudinary');
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadsDir = path.join(__dirname, '..', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
+// File filter for image uploads
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -33,8 +20,9 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// Configure upload with cloudinary and file filter
 const upload = multer({
-  storage: storage,
+  storage: cloudinaryUpload.storage,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   },
@@ -93,15 +81,15 @@ router.post('/create', ensureAuthenticated, upload.fields([
     let ownerProfilePath = '';
 
     if (req.files.shopLogo) {
-      shopLogoPath = `/uploads/${req.files.shopLogo[0].filename}`;
+      shopLogoPath = req.files.shopLogo[0].path; // Cloudinary URL
     }
 
     if (req.files.shopBanner) {
-      shopBannerPath = `/uploads/${req.files.shopBanner[0].filename}`;
+      shopBannerPath = req.files.shopBanner[0].path; // Cloudinary URL
     }
 
     if (req.files.ownerProfilePhoto) {
-      ownerProfilePath = `/uploads/${req.files.ownerProfilePhoto[0].filename}`;
+      ownerProfilePath = req.files.ownerProfilePhoto[0].path; // Cloudinary URL
     }
 
     // Process product images
@@ -114,7 +102,7 @@ router.post('/create', ensureAuthenticated, upload.fields([
       
       return {
         ...product,
-        image: productImage ? `/uploads/${productImage.filename}` : '',
+        image: productImage ? productImage.path : '', // Cloudinary URL
         imagePreview: product.imagePreview || ''
       };
     });

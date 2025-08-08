@@ -5,22 +5,9 @@ const path = require('path');
 const fs = require('fs');
 const Shop = require('../models/Shop');
 const { ensureAuthenticated } = require('../middleware/auth');
+const { upload: cloudinaryUpload, cloudinary } = require('../middleware/cloudinary');
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadsDir = path.join(__dirname, '..', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
+// File filter for image uploads
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -33,8 +20,9 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// Configure upload with cloudinary and file filter
 const upload = multer({
-  storage: storage,
+  storage: cloudinaryUpload.storage,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   },
@@ -61,7 +49,7 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
       categories: Array.isArray(businessCategories) ? businessCategories : [businessCategories],
       shopType: businessType,
       shopDescription: description,
-      shopLogo: req.file ? `/uploads/${req.file.filename}` : null,
+      shopLogo: req.file ? req.file.path : null, // Cloudinary URL
       facebookUrl: facebook || '',
       instagramHandle: instagram || '',
       whatsappNumber: whatsapp || '',
@@ -175,34 +163,13 @@ router.put('/:shopId', ensureAuthenticated, upload.fields([
     // Handle file uploads
     if (req.files) {
       if (req.files.shopLogo) {
-        // Delete old logo if exists
-        if (shop.shopLogo) {
-          const oldLogoPath = path.join(__dirname, '..', shop.shopLogo);
-          if (fs.existsSync(oldLogoPath)) {
-            fs.unlinkSync(oldLogoPath);
-          }
-        }
-        shop.shopLogo = `/uploads/${req.files.shopLogo[0].filename}`;
+        shop.shopLogo = req.files.shopLogo[0].path; // Cloudinary URL
       }
       if (req.files.shopBanner) {
-        // Delete old banner if exists
-        if (shop.shopBanner) {
-          const oldBannerPath = path.join(__dirname, '..', shop.shopBanner);
-          if (fs.existsSync(oldBannerPath)) {
-            fs.unlinkSync(oldBannerPath);
-          }
-        }
-        shop.shopBanner = `/uploads/${req.files.shopBanner[0].filename}`;
+        shop.shopBanner = req.files.shopBanner[0].path; // Cloudinary URL
       }
       if (req.files.ownerProfilePhoto) {
-        // Delete old profile photo if exists
-        if (shop.ownerProfilePhoto) {
-          const oldProfilePath = path.join(__dirname, '..', shop.ownerProfilePhoto);
-          if (fs.existsSync(oldProfilePath)) {
-            fs.unlinkSync(oldProfilePath);
-          }
-        }
-        shop.ownerProfilePhoto = `/uploads/${req.files.ownerProfilePhoto[0].filename}`;
+        shop.ownerProfilePhoto = req.files.ownerProfilePhoto[0].path; // Cloudinary URL
       }
     }
 
@@ -280,7 +247,7 @@ router.post('/:shopId/gallery', ensureAuthenticated, upload.array('galleryImages
     }
 
     // Process uploaded images
-    const newGalleryImages = req.files.map(file => `/uploads/${file.filename}`);
+    const newGalleryImages = req.files.map(file => file.path); // Cloudinary URLs
     
     // Add new images to existing gallery
     const updatedGallery = [...(shop.gallery || []), ...newGalleryImages];
@@ -365,7 +332,7 @@ router.post('/:id/add-product', ensureAuthenticated, upload.single('productImage
       price: Number(price),
       discountPercentage: Number(discountPercentage) || 0,
       category,
-      image: req.file ? `/uploads/${req.file.filename}` : ''
+      image: req.file ? req.file.path : '' // Cloudinary URL
     };
     shop.products.push(product);
     await shop.save();
@@ -398,7 +365,7 @@ router.put('/:shopId/update-product/:productIndex', ensureAuthenticated, upload.
     if (price) shop.products[idx].price = Number(price);
     if (discountPercentage !== undefined) shop.products[idx].discountPercentage = Number(discountPercentage) || 0;
     if (category) shop.products[idx].category = category;
-    if (req.file) shop.products[idx].image = `/uploads/${req.file.filename}`;
+    if (req.file) shop.products[idx].image = req.file.path; // Cloudinary URL
     await shop.save();
     res.json({ message: 'Product updated successfully', shop });
   } catch (error) {

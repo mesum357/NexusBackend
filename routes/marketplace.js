@@ -5,22 +5,9 @@ const path = require('path');
 const fs = require('fs');
 const Product = require('../models/Product');
 const { ensureAuthenticated } = require('../middleware/auth');
+const { upload: cloudinaryUpload, cloudinary } = require('../middleware/cloudinary');
 
-// Configure multer for image uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadsDir = path.join(__dirname, '..', 'uploads', 'products');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'product-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
+// File filter for image uploads
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -33,8 +20,9 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// Configure upload with cloudinary and file filter
 const upload = multer({
-  storage: storage,
+  storage: cloudinaryUpload.storage,
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
   },
@@ -161,7 +149,7 @@ router.post('/', ensureAuthenticated, upload.array('images', 10), async (req, re
     }
 
     // Handle image uploads
-    const images = req.files ? req.files.map(file => `/uploads/products/${file.filename}`) : [];
+    const images = req.files ? req.files.map(file => file.path) : []; // Cloudinary URLs
 
     // Parse specifications if provided
     let parsedSpecifications = {};
@@ -239,7 +227,7 @@ router.put('/:id', ensureAuthenticated, upload.array('images', 10), async (req, 
 
     // Handle new image uploads
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map(file => `/uploads/products/${file.filename}`);
+      const newImages = req.files.map(file => file.path); // Cloudinary URLs
       finalImages = [...finalImages, ...newImages];
     }
 

@@ -233,7 +233,7 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
     
     // Add profile image if uploaded
     if (req.file) {
-        userData.profileImage = `/uploads/${req.file.filename}`;
+        userData.profileImage = req.file.path; // Cloudinary URL
     }
     
     User.register(userData, password, async function(err, user) {
