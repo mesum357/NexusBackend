@@ -935,3 +935,26 @@ router.get('/notifications/my', ensureAuthenticated, async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch notifications' });
   }
 });
+
+// Get messages for all institutes the current user has applied to
+router.get('/messages/my', ensureAuthenticated, async (req, res) => {
+  try {
+    const applications = await StudentApplication.find({ user: req.user._id }).select('institute');
+    const instituteIds = [...new Set(applications.map(a => String(a.institute)))];
+
+    if (instituteIds.length === 0) {
+      return res.json({ messages: [] });
+    }
+
+    const messages = await InstituteMessage
+      .find({ institute: { $in: instituteIds } })
+      .populate('institute', 'name')
+      .sort({ createdAt: -1 })
+      .limit(200);
+
+    return res.json({ messages });
+  } catch (error) {
+    console.error('Error fetching my messages:', error);
+    return res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
