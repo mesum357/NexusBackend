@@ -7,6 +7,9 @@ const Institute = require('../models/Institute');
 const Review = require('../models/Review');
 const { ensureAuthenticated } = require('../middleware/auth');
 const { upload, cloudinary, validateCloudinaryConfig } = require('../middleware/cloudinary');
+const StudentApplication = require('../models/StudentApplication');
+const InstituteNotification = require('../models/InstituteNotification');
+const InstituteMessage = require('../models/InstituteMessage');
 
 // File filter for image uploads
 const fileFilter = (req, file, cb) => {
@@ -791,3 +794,144 @@ router.post('/:id/gallery-upload-test', ensureAuthenticated, upload.array('galle
 });
 
 module.exports = router; 
+ 
+// Apply Now: submit a student application with optional profile image
+router.post('/:id/apply', ensureAuthenticated, upload.single('profileImage'), async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const { studentName, fatherName, cnic, city, courseName, courseDuration } = req.body;
+
+    if (!studentName || !fatherName || !cnic || !city || !courseName) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate institute exists
+    const institute = await Institute.findById(instituteId);
+    if (!institute) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+
+    const applicationData = {
+      institute: instituteId,
+      user: req.user?._id,
+      studentName,
+      fatherName,
+      cnic,
+      city,
+      courseName,
+      courseDuration: courseDuration || '',
+      profileImage: req.file ? req.file.path : '',
+    };
+
+    const application = await StudentApplication.create(applicationData);
+    return res.status(201).json({ success: true, application });
+  } catch (error) {
+    console.error('Error submitting application:', error);
+    return res.status(500).json({ error: 'Failed to submit application' });
+  }
+});
+
+// Get current user's applications
+router.get('/:id/applications/me', ensureAuthenticated, async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const apps = await StudentApplication.find({ institute: instituteId, user: req.user._id }).sort({ createdAt: -1 });
+    return res.json({ applications: apps });
+  } catch (error) {
+    console.error('Error fetching applications:', error);
+    return res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+// Get all applications for current user across all institutes
+router.get('/applications/my', ensureAuthenticated, async (req, res) => {
+  try {
+    const applications = await StudentApplication.find({ user: req.user._id })
+      .populate('institute', 'name logo city type')
+      .sort({ createdAt: -1 });
+    
+    return res.json({ applications });
+  } catch (error) {
+    console.error('Error fetching user applications:', error);
+    return res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+// Notifications: create and list
+router.post('/:id/notifications', ensureAuthenticated, async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const { message, title } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message is required' });
+    const institute = await Institute.findById(instituteId);
+    if (!institute) return res.status(404).json({ error: 'Institute not found' });
+    if (String(institute.owner) !== String(req.user._id)) return res.status(403).json({ error: 'Unauthorized' });
+    const notification = await InstituteNotification.create({ institute: instituteId, message, title: title || '' });
+    return res.status(201).json({ success: true, notification });
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    return res.status(500).json({ error: 'Failed to create notification' });
+  }
+});
+
+router.get('/:id/notifications', async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const items = await InstituteNotification.find({ institute: instituteId }).sort({ createdAt: -1 }).limit(50);
+    return res.json({ notifications: items });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    return res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// Messages: create and list
+router.post('/:id/messages', ensureAuthenticated, async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const { senderName, message } = req.body;
+    if (!senderName || !message) return res.status(400).json({ error: 'senderName and message are required' });
+    const institute = await Institute.findById(instituteId);
+    if (!institute) return res.status(404).json({ error: 'Institute not found' });
+    if (String(institute.owner) !== String(req.user._id)) return res.status(403).json({ error: 'Unauthorized' });
+    const created = await InstituteMessage.create({ institute: instituteId, senderName, message });
+    return res.status(201).json({ success: true, message: created });
+  } catch (error) {
+    console.error('Error creating message:', error);
+    return res.status(500).json({ error: 'Failed to create message' });
+  }
+});
+
+router.get('/:id/messages', async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const items = await InstituteMessage.find({ institute: instituteId }).sort({ createdAt: -1 }).limit(50);
+    return res.json({ messages: items });
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    return res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// Get notifications for all institutes the current user has applied to
+router.get('/notifications/my', ensureAuthenticated, async (req, res) => {
+  try {
+    const applications = await StudentApplication.find({ user: req.user._id }).select('institute');
+    const instituteIds = [...new Set(applications.map(a => String(a.institute)))];
+
+    if (instituteIds.length === 0) {
+      return res.json({ notifications: [] });
+    }
+
+    const notifications = await InstituteNotification
+      .find({ institute: { $in: instituteIds } })
+      .populate('institute', 'name')
+      .sort({ createdAt: -1 })
+      .limit(200);
+
+    return res.json({ notifications });
+  } catch (error) {
+    console.error('Error fetching my notifications:', error);
+    return res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});

@@ -48,21 +48,32 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'massux357@gmail.com';
 
 app.use(express.json());
 
+// Trust Railway/Proxy so secure cookies work behind HTTPS proxies
+app.set('trust proxy', 1);
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
+  origin: process.env.NODE_ENV === 'production'
     ? [process.env.FRONTEND_URL, /\.railway\.app$/]
     : ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:8083', 'http://localhost:8082'],
   credentials: true,
 }));
 
 // Session configuration
+const isProduction = process.env.NODE_ENV === 'production';
 app.use(session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  proxy: isProduction,
+  cookie: {
+    httpOnly: true,
+    secure: isProduction, // required for SameSite=None
+    sameSite: isProduction ? 'none' : 'lax',
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+  },
 }));
 
 app.use(passport.initialize());
