@@ -10,6 +10,7 @@ const { upload, cloudinary, validateCloudinaryConfig } = require('../middleware/
 const StudentApplication = require('../models/StudentApplication');
 const InstituteNotification = require('../models/InstituteNotification');
 const InstituteMessage = require('../models/InstituteMessage');
+const InstituteTask = require('../models/InstituteTask');
 
 // File filter for image uploads
 const fileFilter = (req, file, cb) => {
@@ -910,6 +911,129 @@ router.get('/:id/messages', async (req, res) => {
   } catch (error) {
     console.error('Error fetching messages:', error);
     return res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// Helper to normalize date as YYYY-MM-DD
+const getYYYYMMDD = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Tasks: create today's class task (owner only)
+router.post('/:id/tasks', ensureAuthenticated, async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const { title, description, type, date } = req.body;
+    if (!title || !description || !type) {
+      return res.status(400).json({ error: 'title, description and type are required' });
+    }
+
+    const institute = await Institute.findById(instituteId);
+    if (!institute) return res.status(404).json({ error: 'Institute not found' });
+    if (String(institute.owner) !== String(req.user._id)) return res.status(403).json({ error: 'Unauthorized' });
+
+    const normalizedDate = date && /\d{4}-\d{2}-\d{2}/.test(date) ? date : getYYYYMMDD();
+
+    const created = await InstituteTask.create({
+      institute: instituteId,
+      title: title.trim(),
+      description: description.trim(),
+      type: String(type).toLowerCase(),
+      date: normalizedDate
+    });
+    return res.status(201).json({ success: true, task: created });
+  } catch (error) {
+    console.error('Error creating task:', error);
+    return res.status(500).json({ error: 'Failed to create task' });
+  }
+});
+
+// Tasks: list tasks for a given date (default today) for an institute
+router.get('/:id/tasks', async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    const date = req.query.date && /\d{4}-\d{2}-\d{2}/.test(String(req.query.date))
+      ? String(req.query.date)
+      : getYYYYMMDD();
+    const items = await InstituteTask.find({ institute: instituteId, date }).sort({ createdAt: -1 });
+    return res.json({ tasks: items, date });
+  } catch (error) {
+    console.error('Error fetching tasks:', error);
+    return res.status(500).json({ error: 'Failed to fetch tasks' });
+  }
+});
+
+// Tasks: list today's tasks across all institutes the current user applied to
+router.get('/tasks/my/today', ensureAuthenticated, async (req, res) => {
+  try {
+    const applications = await StudentApplication.find({ user: req.user._id }).select('institute');
+    const instituteIds = [...new Set(applications.map(a => String(a.institute)))];
+    if (instituteIds.length === 0) {
+      return res.json({ tasks: [] });
+    }
+    const date = getYYYYMMDD();
+    const tasks = await InstituteTask
+      .find({ institute: { $in: instituteIds }, date })
+      .populate('institute', 'name')
+      .sort({ createdAt: -1 })
+      .limit(200);
+    return res.json({ tasks, date });
+  } catch (error) {
+    console.error('Error fetching my tasks:', error);
+    return res.status(500).json({ error: 'Failed to fetch tasks' });
+  }
+});
+
+// Tasks: update a task (owner only)
+router.put('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
+  try {
+    const { id, taskId } = req.params;
+    const institute = await Institute.findById(id);
+    if (!institute) return res.status(404).json({ error: 'Institute not found' });
+    if (String(institute.owner) !== String(req.user._id)) return res.status(403).json({ error: 'Unauthorized' });
+
+    const updates = {};
+    const allowedFields = ['title', 'description', 'type', 'date'];
+    for (const key of allowedFields) {
+      if (key in req.body && req.body[key] !== undefined) {
+        updates[key] = req.body[key];
+      }
+    }
+
+    if (updates.title) updates.title = String(updates.title).trim();
+    if (updates.description) updates.description = String(updates.description).trim();
+    if (updates.type) updates.type = String(updates.type).toLowerCase();
+
+    const task = await InstituteTask.findOneAndUpdate(
+      { _id: taskId, institute: id },
+      { $set: updates },
+      { new: true }
+    );
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    return res.json({ success: true, task });
+  } catch (error) {
+    console.error('Error updating task:', error);
+    return res.status(500).json({ error: 'Failed to update task' });
+  }
+});
+
+// Tasks: delete a task (owner only)
+router.delete('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
+  try {
+    const { id, taskId } = req.params;
+    const institute = await Institute.findById(id);
+    if (!institute) return res.status(404).json({ error: 'Institute not found' });
+    if (String(institute.owner) !== String(req.user._id)) return res.status(403).json({ error: 'Unauthorized' });
+
+    const result = await InstituteTask.deleteOne({ _id: taskId, institute: id });
+    if (result.deletedCount === 0) return res.status(404).json({ error: 'Task not found' });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    return res.status(500).json({ error: 'Failed to delete task' });
   }
 });
 
