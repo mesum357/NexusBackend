@@ -19,9 +19,20 @@ const facultySchema = new mongoose.Schema({
 });
 
 const instituteSchema = new mongoose.Schema({
+  // Domain indicates whether this record represents an education institute or a healthcare hospital
+  domain: { type: String, enum: ['education', 'healthcare'], default: 'education' },
   // Basic Information
   name: { type: String, required: true },
-  type: { type: String, enum: ['University', 'College', 'School', 'Academy'], required: true },
+  type: { 
+    type: String, 
+    enum: [
+      // Education types
+      'University', 'College', 'School', 'Academy',
+      // Healthcare types
+      'Hospital', 'General', 'Specialized', 'Clinic', 'Medical Center'
+    ], 
+    required: true 
+  },
   location: { type: String, required: true },
   city: { type: String, required: true },
   province: { type: String, required: true },

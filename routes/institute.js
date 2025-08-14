@@ -179,6 +179,10 @@ router.post('/create', (req, res, next) => {
       rating: 4.5,
       totalReviews: 0
     };
+    // Allow frontend to set domain; default to education
+    if (req.body.domain && ['education','healthcare'].includes(req.body.domain)) {
+      instituteData.domain = req.body.domain;
+    }
 
     console.log('Creating institute with data:', instituteData);
 
@@ -215,7 +219,15 @@ router.post('/create', (req, res, next) => {
 // Get all institutes
 router.get('/all', async (req, res) => {
   try {
-    const institutes = await Institute.find();
+    // Filter by optional domain query param: education (default) or healthcare
+    const { domain } = req.query;
+    const query = {};
+    if (domain === 'education') {
+      query.domain = 'education';
+    } else if (domain === 'healthcare') {
+      query.domain = 'healthcare';
+    }
+    const institutes = await Institute.find(query);
     res.json({ institutes });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -970,9 +982,18 @@ router.get('/:id/tasks', async (req, res) => {
 router.get('/tasks/my/today', ensureAuthenticated, async (req, res) => {
   try {
     const applications = await StudentApplication.find({ user: req.user._id }).select('institute');
-    const instituteIds = [...new Set(applications.map(a => String(a.institute)))];
+    let instituteIds = [...new Set(applications.map(a => String(a.institute)))];
     if (instituteIds.length === 0) {
       return res.json({ tasks: [] });
+    }
+    // Optional domain filter
+    const { domain } = req.query;
+    if (domain === 'education' || domain === 'healthcare') {
+      const allowed = await Institute.find({ _id: { $in: instituteIds }, domain }).select('_id');
+      instituteIds = allowed.map(i => String(i._id));
+      if (instituteIds.length === 0) {
+        return res.json({ tasks: [], date: getYYYYMMDD() });
+      }
     }
     const date = getYYYYMMDD();
     const tasks = await InstituteTask
@@ -1041,10 +1062,20 @@ router.delete('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
 router.get('/notifications/my', ensureAuthenticated, async (req, res) => {
   try {
     const applications = await StudentApplication.find({ user: req.user._id }).select('institute');
-    const instituteIds = [...new Set(applications.map(a => String(a.institute)))];
+    let instituteIds = [...new Set(applications.map(a => String(a.institute)))];
 
     if (instituteIds.length === 0) {
       return res.json({ notifications: [] });
+    }
+
+    // Optional domain filter
+    const { domain } = req.query;
+    if (domain === 'education' || domain === 'healthcare') {
+      const allowed = await Institute.find({ _id: { $in: instituteIds }, domain }).select('_id');
+      instituteIds = allowed.map(i => String(i._id));
+      if (instituteIds.length === 0) {
+        return res.json({ notifications: [] });
+      }
     }
 
     const notifications = await InstituteNotification
@@ -1064,10 +1095,20 @@ router.get('/notifications/my', ensureAuthenticated, async (req, res) => {
 router.get('/messages/my', ensureAuthenticated, async (req, res) => {
   try {
     const applications = await StudentApplication.find({ user: req.user._id }).select('institute');
-    const instituteIds = [...new Set(applications.map(a => String(a.institute)))];
+    let instituteIds = [...new Set(applications.map(a => String(a.institute)))];
 
     if (instituteIds.length === 0) {
       return res.json({ messages: [] });
+    }
+
+    // Optional domain filter
+    const { domain } = req.query;
+    if (domain === 'education' || domain === 'healthcare') {
+      const allowed = await Institute.find({ _id: { $in: instituteIds }, domain }).select('_id');
+      instituteIds = allowed.map(i => String(i._id));
+      if (instituteIds.length === 0) {
+        return res.json({ messages: [] });
+      }
     }
 
     const messages = await InstituteMessage
