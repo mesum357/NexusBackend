@@ -870,6 +870,74 @@ router.get('/applications/my', ensureAuthenticated, async (req, res) => {
   }
 });
 
+// Get all applications for an institute (admin only)
+router.get('/:id/applications', ensureAuthenticated, async (req, res) => {
+  try {
+    const instituteId = req.params.id;
+    
+    // Check if user is the owner of the institute
+    const institute = await Institute.findById(instituteId);
+    if (!institute) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+    
+    if (String(institute.owner) !== String(req.user._id)) {
+      return res.status(403).json({ error: 'Unauthorized: Only institute owner can view applications' });
+    }
+    
+    const applications = await StudentApplication.find({ institute: instituteId })
+      .populate('user', 'username email profileImage')
+      .sort({ createdAt: -1 });
+    
+    return res.json({ applications });
+  } catch (error) {
+    console.error('Error fetching institute applications:', error);
+    return res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+// Update application status (approve/reject) - admin only
+router.put('/:id/applications/:applicationId/status', ensureAuthenticated, async (req, res) => {
+  try {
+    const { id: instituteId, applicationId } = req.params;
+    const { status } = req.body;
+    
+    if (!['accepted', 'rejected', 'review'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be accepted, rejected, or review' });
+    }
+    
+    // Check if user is the owner of the institute
+    const institute = await Institute.findById(instituteId);
+    if (!institute) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+    
+    if (String(institute.owner) !== String(req.user._id)) {
+      return res.status(403).json({ error: 'Unauthorized: Only institute owner can update applications' });
+    }
+    
+    // Update the application status
+    const updatedApplication = await StudentApplication.findByIdAndUpdate(
+      applicationId,
+      { status },
+      { new: true }
+    ).populate('user', 'username email profileImage');
+    
+    if (!updatedApplication) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    
+    return res.json({ 
+      success: true, 
+      application: updatedApplication,
+      message: `Application ${status} successfully` 
+    });
+  } catch (error) {
+    console.error('Error updating application status:', error);
+    return res.status(500).json({ error: 'Failed to update application status' });
+  }
+});
+
 // Notifications: create and list
 router.post('/:id/notifications', ensureAuthenticated, async (req, res) => {
   try {
