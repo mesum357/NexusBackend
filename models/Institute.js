@@ -67,6 +67,10 @@ const instituteSchema = new mongoose.Schema({
   // Status and Verification
   admissionStatus: { type: String, enum: ['Open', 'Closed', 'Coming Soon'], default: 'Open' },
   verified: { type: Boolean, default: false },
+  approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  approvalNotes: { type: String }, // Admin notes for approval/rejection
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Admin who approved/rejected
+  approvedAt: { type: Date }, // When it was approved/rejected
   
   // Ratings and Reviews
   rating: { type: Number, default: 4.5 },

@@ -18,6 +18,10 @@ const productSchema = new mongoose.Schema({
   ownerPhone: { type: String },
   ownerEmail: { type: String },
   status: { type: String, enum: ['active', 'sold', 'expired'], default: 'active' },
+  approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  approvalNotes: { type: String }, // Admin notes for approval/rejection
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Admin who approved/rejected
+  approvedAt: { type: Date }, // When it was approved/rejected
   tags: [{ type: String }],
   specifications: { type: Map, of: String }, // For additional product details
   contactPreference: { type: String, enum: ['phone', 'email', 'both'], default: 'both' }

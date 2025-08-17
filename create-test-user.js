@@ -1,45 +1,41 @@
 const mongoose = require('mongoose');
 const User = require('./models/User');
+require('dotenv').config();
 
 async function createTestUser() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pak-nexus');
+    // Connect to MongoDB
+    await mongoose.connect(process.env.MONGODB_URI);
     console.log('Connected to MongoDB');
 
-    // Check if user already exists
+    // Check if test user already exists
     const existingUser = await User.findOne({ email: 'test@example.com' });
     if (existingUser) {
-      console.log('✅ Test user already exists:', {
-        id: existingUser._id,
-        username: existingUser.username,
-        email: existingUser.email
-      });
-      return existingUser;
+      console.log('Test user already exists:', existingUser.email);
+      return;
     }
 
-    // Create a test user
+    // Create test user
     const testUser = new User({
-      username: 'testuser',
+      username: 'test@example.com',
       email: 'test@example.com',
       fullName: 'Test User',
-      mobile: '+1234567890',
-      city: 'Test City',
-      bio: 'This is a test user for testing the message functionality.',
-      verified: true
+      mobile: '1234567890',
+      verified: true, // Set as verified for testing
+      isAdmin: false
     });
 
-    const savedUser = await testUser.save();
-    console.log('✅ Test user created:', {
-      id: savedUser._id,
-      username: savedUser.username,
-      email: savedUser.email,
-      fullName: savedUser.fullName
-    });
+    // Set password using passport-local-mongoose
+    await testUser.setPassword('password123');
+    await testUser.save();
 
-    return savedUser;
+    console.log('Test user created successfully:');
+    console.log('Email: test@example.com');
+    console.log('Password: password123');
+    console.log('Username: test@example.com');
 
   } catch (error) {
-    console.error('❌ Error creating test user:', error);
+    console.error('Error creating test user:', error);
   } finally {
     await mongoose.disconnect();
     console.log('Disconnected from MongoDB');

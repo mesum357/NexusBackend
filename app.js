@@ -10,6 +10,7 @@ const server = http.createServer(app);
 const io = socketIo(server);
 const bodyParser = require('body-parser');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const passport = require('passport');
 const findOrCreate = require('mongoose-findorcreate');
 const passportLocalMongoose = require('passport-local-mongoose');
@@ -25,6 +26,8 @@ const friendsRoutes = require('./routes/friends');
 const followRoutes = require('./routes/follow');
 const marketplaceRoutes = require('./routes/marketplace');
 const categoryRoutes = require('./routes/categories');
+const paymentRoutes = require('./routes/payment');
+const adminRoutes = require('./routes/admin');
 const fs = require('fs');
 const { upload } = require('./middleware/cloudinary');
 
@@ -57,7 +60,7 @@ app.use(express.static('public'));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? [process.env.FRONTEND_URL, /\.railway\.app$/]
-    : ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:8083', 'http://localhost:8082'],
+    : ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:8083', 'http://localhost:8082', 'http://localhost:3001'],
   credentials: true,
 }));
 
@@ -74,6 +77,11 @@ app.use(session({
     sameSite: isProduction ? 'none' : 'lax',
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
   },
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    collectionName: 'sessions',
+    ttl: 60 * 60 * 24 * 7, // 7 days
+  }),
 }));
 
 app.use(passport.initialize());
@@ -113,18 +121,18 @@ const User = require('./models/User');
 
 // Passport configuration
 passport.use(new LocalStrategy({
-    usernameField: 'email',
+    usernameField: 'username',
     passwordField: 'password'
-}, async function(email, password, done) {
+}, async function(username, password, done) {
     try {
-        const user = await User.findOne({ email: email });
+        const user = await User.findOne({ username: username });
         if (!user) {
-            return done(null, false, { message: 'Invalid email or password' });
+            return done(null, false, { message: 'Invalid username or password' });
         }
         
         const isPasswordValid = await user.authenticate(password);
         if (!isPasswordValid) {
-            return done(null, false, { message: 'Invalid email or password' });
+            return done(null, false, { message: 'Invalid username or password' });
         }
         
         return done(null, user);
@@ -294,7 +302,8 @@ app.post("/login", function(req, res, next) {
         if (!user) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
-        if (!user.verified) {
+        // In development, allow unverified users to login
+        if (!user.verified && process.env.NODE_ENV !== 'development') {
             return res.status(401).json({ error: 'Please verify your email before logging in.' });
         }
         req.logIn(user, function(err) {
@@ -337,6 +346,446 @@ app.get('/api/auth/me', (req, res) => {
   } else {
     res.status(401).json({ error: 'Not authenticated' });
   }
+});
+
+// Add /api/auth/register endpoint for admin panel
+app.post('/api/auth/register', upload.single('profileImage'), async function(req, res) {
+    const { password, confirmPassword, email, fullName, mobile, city, username, isAdmin } = req.body;
+    console.log('Admin Register request body:', req.body);
+    console.log('Individual fields:', { password: !!password, confirmPassword: !!confirmPassword, email: !!email, fullName: !!fullName, mobile: !!mobile, city: !!city, username: !!username });
+    
+    // Validation - make city optional for now
+    if (!password || !confirmPassword || !email || !fullName || !mobile || !username) {
+        console.log('Validation failed for fields:', { password: !!password, confirmPassword: !!confirmPassword, email: !!email, fullName: !!fullName, mobile: !!mobile, username: !!username });
+        return res.status(400).json({ error: 'All fields are required' });
+    }
+    if (password !== confirmPassword) {
+        return res.status(400).json({ error: 'Passwords do not match' });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    
+    // Prepare user data
+    const userData = {
+        username: username,
+        email: email,
+        fullName: fullName,
+        mobile: mobile,
+        city: city || '', // Make city optional
+        verified: true, // Admin users are auto-verified
+        verificationToken,
+        isAdmin: isAdmin || false
+    };
+    
+    // Add profile image if uploaded
+    if (req.file) {
+        userData.profileImage = req.file.path;
+    }
+    
+    User.register(userData, password, async function(err, user) {
+        if (err) {
+            console.error('Admin Registration error:', err);
+            let errorMessage = 'Registration failed';
+            if (err.name === 'UserExistsError') {
+                errorMessage = 'User already exists with this email or username';
+            }
+            return res.status(400).json({ error: errorMessage });
+        }
+        
+        // Admin users don't need email verification
+        user.verified = true;
+        user.verificationToken = undefined;
+        await user.save();
+        
+        return res.status(201).json({ 
+            success: true, 
+            message: 'Admin user registered successfully!',
+            user: { 
+                id: user._id, 
+                email: user.email, 
+                username: user.username,
+                isAdmin: user.isAdmin 
+            }
+        });
+    });
+});
+
+// Add /api/auth/login endpoint for admin panel
+app.post('/api/auth/login', function(req, res, next) {
+    console.log('Login request body:', req.body);
+    passport.authenticate("local", function(err, user, info) {
+        if (err) {
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid username or password' });
+        }
+        // In development, allow unverified users to login
+        if (!user.verified && process.env.NODE_ENV !== 'development') {
+            return res.status(401).json({ error: 'Please verify your email before logging in.' });
+        }
+        req.logIn(user, function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Internal server error' });
+            }
+            return res.status(200).json({ 
+                success: true, 
+                message: 'Login successful', 
+                user: { 
+                    id: user._id, 
+                    email: user.email, 
+                    username: user.username,
+                    isAdmin: user.isAdmin || false
+                } 
+            });
+        });
+    })(req, res, next);
+});
+
+// Add /api/auth/logout endpoint for admin panel
+app.post('/api/auth/logout', function(req, res, next) {
+    req.logout(function(err) {
+        if (err) { 
+            return next(err); 
+        }
+        res.status(200).json({ success: true, message: 'Logout successful' });
+    });
+});
+
+// Payment Settings endpoints
+app.get('/api/admin/payment-settings', async function(req, res) {
+    try {
+        // Check if user is admin
+        if (!req.isAuthenticated() || !req.user.isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        // For now, return default settings
+        // In production, you'd store these in a database
+        const defaultSettings = {
+            bankName: 'HBL Bank',
+            accountTitle: 'Pak Nexus Services',
+            accountNumber: '1234-5678-9012-3456',
+            iban: 'PK36HABB0000001234567890',
+            branchCode: '1234',
+            swiftCode: 'HABBPKKA',
+            qrCodeImage: '',
+            paymentAmounts: {
+                shop: 5000,
+                institute: 10000,
+                hospital: 15000,
+                marketplace: 2000
+            }
+        };
+
+        res.json({ settings: defaultSettings });
+    } catch (error) {
+        console.error('Error fetching payment settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/admin/payment-settings', upload.single('qrCodeImage'), async function(req, res) {
+    try {
+        // Check if user is admin
+        if (!req.isAuthenticated() || !req.user.isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { bankName, accountTitle, accountNumber, iban, branchCode, swiftCode, paymentAmounts } = req.body;
+        
+        // Validate required fields
+        if (!bankName || !accountTitle || !accountNumber || !iban) {
+            return res.status(400).json({ error: 'Required fields are missing' });
+        }
+
+        // Parse payment amounts
+        let parsedPaymentAmounts;
+        try {
+            parsedPaymentAmounts = JSON.parse(paymentAmounts);
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid payment amounts format' });
+        }
+
+        // Handle QR code image upload
+        let qrCodeImageUrl = '';
+        if (req.file) {
+            qrCodeImageUrl = req.file.path; // Cloudinary URL
+        }
+
+        // In production, you'd save these settings to a database
+        // For now, we'll just return success
+        const updatedSettings = {
+            bankName,
+            accountTitle,
+            accountNumber,
+            iban,
+            branchCode: branchCode || '',
+            swiftCode: swiftCode || '',
+            qrCodeImage: qrCodeImageUrl,
+            paymentAmounts: parsedPaymentAmounts
+        };
+
+        res.json({ 
+            success: true, 
+            message: 'Payment settings updated successfully',
+            settings: updatedSettings
+        });
+    } catch (error) {
+        console.error('Error updating payment settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Public endpoint to get payment settings for frontend
+app.get('/api/payment/settings', async function(req, res) {
+    try {
+        // Return payment settings for frontend use
+        const defaultSettings = {
+            bankName: 'HBL Bank',
+            accountTitle: 'Pak Nexus Services',
+            accountNumber: '1234-5678-9012-3456',
+            iban: 'PK36HABB0000001234567890',
+            branchCode: '1234',
+            swiftCode: 'HABBPKKA',
+            qrCodeImage: '',
+            paymentAmounts: {
+                shop: 5000,
+                institute: 10000,
+                hospital: 15000,
+                marketplace: 2000
+            }
+        };
+
+        res.json({ settings: defaultSettings });
+    } catch (error) {
+        console.error('Error fetching payment settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Add /api/auth/register endpoint for admin panel
+app.post('/api/auth/register', upload.single('profileImage'), async function(req, res) {
+    const { password, confirmPassword, email, fullName, mobile, city, username, isAdmin } = req.body;
+    console.log('Admin Register request body:', req.body);
+    console.log('Individual fields:', { password: !!password, confirmPassword: !!confirmPassword, email: !!email, fullName: !!fullName, mobile: !!mobile, city: !!city, username: !!username });
+    
+    // Validation - make city optional for now
+    if (!password || !confirmPassword || !email || !fullName || !mobile || !username) {
+        console.log('Validation failed for fields:', { password: !!password, confirmPassword: !!confirmPassword, email: !!email, fullName: !!fullName, mobile: !!mobile, username: !!username });
+        return res.status(400).json({ error: 'All fields are required' });
+    }
+    if (password !== confirmPassword) {
+        return res.status(400).json({ error: 'Passwords do not match' });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    
+    // Prepare user data
+    const userData = {
+        username: username,
+        email: email,
+        fullName: fullName,
+        mobile: mobile,
+        city: city || '', // Make city optional
+        verified: true, // Admin users are auto-verified
+        verificationToken,
+        isAdmin: isAdmin || false
+    };
+    
+    // Add profile image if uploaded
+    if (req.file) {
+        userData.profileImage = req.file.path;
+    }
+    
+    User.register(userData, password, async function(err, user) {
+        if (err) {
+            console.error('Admin Registration error:', err);
+            let errorMessage = 'Registration failed';
+            if (err.name === 'UserExistsError') {
+                errorMessage = 'User already exists with this email or username';
+            }
+            return res.status(400).json({ error: errorMessage });
+        }
+        
+        // Admin users don't need email verification
+        user.verified = true;
+        user.verificationToken = undefined;
+        await user.save();
+        
+        return res.status(201).json({ 
+            success: true, 
+            message: 'Admin user registered successfully!',
+            user: { 
+                id: user._id, 
+                email: user.email, 
+                username: user.username,
+                isAdmin: user.isAdmin 
+            }
+        });
+    });
+});
+
+// Add /api/auth/login endpoint for admin panel
+app.post('/api/auth/login', function(req, res, next) {
+    console.log('Login request body:', req.body);
+    passport.authenticate("local", function(err, user, info) {
+        if (err) {
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid username or password' });
+        }
+        // In development, allow unverified users to login
+        if (!user.verified && process.env.NODE_ENV !== 'development') {
+            return res.status(401).json({ error: 'Please verify your email before logging in.' });
+        }
+        req.logIn(user, function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Internal server error' });
+            }
+            return res.status(200).json({ 
+                success: true, 
+                message: 'Login successful', 
+                user: { 
+                    id: user._id, 
+                    email: user.email, 
+                    username: user.username,
+                    isAdmin: user.isAdmin || false
+                } 
+            });
+        });
+    })(req, res, next);
+});
+
+// Add /api/auth/logout endpoint for admin panel
+app.post('/api/auth/logout', function(req, res, next) {
+    req.logout(function(err) {
+        if (err) { 
+            return next(err); 
+        }
+        res.status(200).json({ success: true, message: 'Logout successful' });
+    });
+});
+
+// Payment Settings endpoints
+app.get('/api/admin/payment-settings', async function(req, res) {
+    try {
+        // Check if user is admin
+        if (!req.isAuthenticated() || !req.user.isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        // For now, return default settings
+        // In production, you'd store these in a database
+        const defaultSettings = {
+            bankName: 'HBL Bank',
+            accountTitle: 'Pak Nexus Services',
+            accountNumber: '1234-5678-9012-3456',
+            iban: 'PK36HABB0000001234567890',
+            branchCode: '1234',
+            swiftCode: 'HABBPKKA',
+            qrCodeImage: '',
+            paymentAmounts: {
+                shop: 5000,
+                institute: 10000,
+                hospital: 15000,
+                marketplace: 2000
+            }
+        };
+
+        res.json({ settings: defaultSettings });
+    } catch (error) {
+        console.error('Error fetching payment settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/admin/payment-settings', upload.single('qrCodeImage'), async function(req, res) {
+    try {
+        // Check if user is admin
+        if (!req.isAuthenticated() || !req.user.isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { bankName, accountTitle, accountNumber, iban, branchCode, swiftCode, paymentAmounts } = req.body;
+        
+        // Validate required fields
+        if (!bankName || !accountTitle || !accountNumber || !iban) {
+            return res.status(400).json({ error: 'Required fields are missing' });
+        }
+
+        // Parse payment amounts
+        let parsedPaymentAmounts;
+        try {
+            parsedPaymentAmounts = JSON.parse(paymentAmounts);
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid payment amounts format' });
+        }
+
+        // Handle QR code image upload
+        let qrCodeImageUrl = '';
+        if (req.file) {
+            qrCodeImageUrl = req.file.path; // Cloudinary URL
+        }
+
+        // In production, you'd save these settings to a database
+        // For now, we'll just return success
+        const updatedSettings = {
+            bankName,
+            accountTitle,
+            accountNumber,
+            iban,
+            branchCode: branchCode || '',
+            swiftCode: swiftCode || '',
+            qrCodeImage: qrCodeImageUrl,
+            paymentAmounts: parsedPaymentAmounts
+        };
+
+        res.json({ 
+            success: true, 
+            message: 'Payment settings updated successfully',
+            settings: updatedSettings
+        });
+    } catch (error) {
+        console.error('Error updating payment settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Public endpoint to get payment settings for frontend
+app.get('/api/payment/settings', async function(req, res) {
+    try {
+        // Return payment settings for frontend use
+        const defaultSettings = {
+            bankName: 'HBL Bank',
+            accountTitle: 'Pak Nexus Services',
+            accountNumber: '1234-5678-9012-3456',
+            iban: 'PK36HABB0000001234567890',
+            branchCode: '1234',
+            swiftCode: 'HABBPKKA',
+            qrCodeImage: '',
+            paymentAmounts: {
+                shop: 5000,
+                institute: 10000,
+                hospital: 15000,
+                marketplace: 2000
+            }
+        };
+
+        res.json({ settings: defaultSettings });
+    } catch (error) {
+        console.error('Error fetching payment settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.get('/', (req, res) => {
@@ -398,6 +847,100 @@ app.post('/reset-password', async (req, res) => {
   });
 });
 
+// Endpoint to automatically approve entity when payment is verified
+app.post('/api/admin/approve-entity', async function(req, res) {
+    try {
+        // Check if user is admin
+        if (!req.isAuthenticated() || !req.user.isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { userId, entityType, paymentRequestId } = req.body;
+        
+        if (!userId || !entityType || !paymentRequestId) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        console.log(`Approving ${entityType} for user ${userId} after payment verification`);
+
+        // Import models based on entity type
+        let EntityModel;
+        let entityCollection;
+        
+        switch (entityType) {
+            case 'shop':
+                EntityModel = require('./models/Shop');
+                entityCollection = 'shops';
+                break;
+            case 'institute':
+                EntityModel = require('./models/Institute');
+                entityCollection = 'institutes';
+                break;
+            case 'hospital':
+                // For now, use Institute model for hospitals since they share the same schema
+                EntityModel = require('./models/Institute');
+                entityCollection = 'institutes';
+                break;
+            case 'marketplace':
+                // For now, use Shop model for marketplace since they share similar structure
+                EntityModel = require('./models/Shop');
+                entityCollection = 'shops';
+                break;
+            default:
+                return res.status(400).json({ error: 'Invalid entity type' });
+        }
+
+        // Find the pending entity for this user
+        let pendingEntity;
+        
+        if (entityType === 'shop') {
+            pendingEntity = await EntityModel.findOne({ 
+                owner: userId, 
+                approvalStatus: 'pending' 
+            });
+        } else if (entityType === 'institute') {
+            pendingEntity = await EntityModel.findOne({ 
+                owner: userId, 
+                approvalStatus: 'pending' 
+            });
+        } else {
+            // For other entity types, try to find by userId or owner field
+            pendingEntity = await EntityModel.findOne({ 
+                $or: [
+                    { userId: userId, approvalStatus: 'pending' },
+                    { owner: userId, approvalStatus: 'pending' }
+                ]
+            });
+        }
+
+        if (!pendingEntity) {
+            console.log(`No pending ${entityType} found for user ${userId}`);
+            return res.status(404).json({ error: `No pending ${entityType} found for this user` });
+        }
+
+        // Update entity approval status to approved
+        pendingEntity.approvalStatus = 'approved';
+        pendingEntity.approvedAt = new Date();
+        pendingEntity.approvedBy = req.user._id;
+        pendingEntity.paymentVerified = true;
+        pendingEntity.paymentRequestId = paymentRequestId;
+        
+        await pendingEntity.save();
+
+        console.log(`${entityType} ${pendingEntity._id} approved successfully for user ${userId}`);
+
+        res.json({ 
+            success: true, 
+            message: `${entityType} approved successfully`,
+            entityId: pendingEntity._id
+        });
+
+    } catch (error) {
+        console.error('Error approving entity:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 app.use('/api/shop', shopRoutes);
 app.use('/api/shop-wizard', shopWizardRoutes);
 app.use('/api/institute', instituteRoutes);
@@ -406,6 +949,8 @@ app.use('/api/friends', friendsRoutes);
 app.use('/api/follow', followRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
