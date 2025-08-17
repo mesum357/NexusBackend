@@ -527,8 +527,12 @@ app.get('/api/admin/payment-settings', async function(req, res) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
-        // For now, return default settings
-        // In production, you'd store these in a database
+        // Check if we have stored settings (from admin panel updates)
+        if (global.paymentSettings) {
+            return res.json({ settings: global.paymentSettings });
+        }
+        
+        // Return default settings if none stored
         const defaultSettings = {
             bankName: 'HBL Bank',
             accountTitle: 'Pak Nexus Services',
@@ -580,8 +584,8 @@ app.post('/api/admin/payment-settings', upload.single('qrCodeImage'), async func
             qrCodeImageUrl = req.file.path; // Cloudinary URL
         }
 
-        // In production, you'd save these settings to a database
-        // For now, we'll just return success
+        // Store settings in global variable for frontend access
+        // In production, you'd save these to a database
         const updatedSettings = {
             bankName,
             accountTitle,
@@ -592,6 +596,9 @@ app.post('/api/admin/payment-settings', upload.single('qrCodeImage'), async func
             qrCodeImage: qrCodeImageUrl,
             paymentAmounts: parsedPaymentAmounts
         };
+        
+        // Store in global variable for frontend access
+        global.paymentSettings = updatedSettings;
 
         res.json({ 
             success: true, 
@@ -607,7 +614,16 @@ app.post('/api/admin/payment-settings', upload.single('qrCodeImage'), async func
 // Public endpoint to get payment settings for frontend
 app.get('/api/payment/settings', async function(req, res) {
     try {
-        // Return payment settings for frontend use
+        // In a real application, you'd store these in a database
+        // For now, we'll use a simple in-memory storage that gets updated by admin
+        // You can replace this with database storage later
+        
+        // Check if we have stored settings (from admin panel updates)
+        if (global.paymentSettings) {
+            return res.json({ settings: global.paymentSettings });
+        }
+        
+        // Return default settings if none stored
         const defaultSettings = {
             bankName: 'HBL Bank',
             accountTitle: 'Pak Nexus Services',
@@ -739,117 +755,11 @@ app.post('/api/auth/logout', function(req, res, next) {
     });
 });
 
-// Payment Settings endpoints
-app.get('/api/admin/payment-settings', async function(req, res) {
-    try {
-        // Check if user is admin
-        if (!req.isAuthenticated() || !req.user.isAdmin) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
 
-        // For now, return default settings
-        // In production, you'd store these in a database
-        const defaultSettings = {
-            bankName: 'HBL Bank',
-            accountTitle: 'Pak Nexus Services',
-            accountNumber: '1234-5678-9012-3456',
-            iban: 'PK36HABB0000001234567890',
-            branchCode: '1234',
-            swiftCode: 'HABBPKKA',
-            qrCodeImage: '',
-            paymentAmounts: {
-                shop: 5000,
-                institute: 10000,
-                hospital: 15000,
-                marketplace: 2000
-            }
-        };
 
-        res.json({ settings: defaultSettings });
-    } catch (error) {
-        console.error('Error fetching payment settings:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
 
-app.post('/api/admin/payment-settings', upload.single('qrCodeImage'), async function(req, res) {
-    try {
-        // Check if user is admin
-        if (!req.isAuthenticated() || !req.user.isAdmin) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
 
-        const { bankName, accountTitle, accountNumber, iban, branchCode, swiftCode, paymentAmounts } = req.body;
-        
-        // Validate required fields
-        if (!bankName || !accountTitle || !accountNumber || !iban) {
-            return res.status(400).json({ error: 'Required fields are missing' });
-        }
 
-        // Parse payment amounts
-        let parsedPaymentAmounts;
-        try {
-            parsedPaymentAmounts = JSON.parse(paymentAmounts);
-        } catch (e) {
-            return res.status(400).json({ error: 'Invalid payment amounts format' });
-        }
-
-        // Handle QR code image upload
-        let qrCodeImageUrl = '';
-        if (req.file) {
-            qrCodeImageUrl = req.file.path; // Cloudinary URL
-        }
-
-        // In production, you'd save these settings to a database
-        // For now, we'll just return success
-        const updatedSettings = {
-            bankName,
-            accountTitle,
-            accountNumber,
-            iban,
-            branchCode: branchCode || '',
-            swiftCode: swiftCode || '',
-            qrCodeImage: qrCodeImageUrl,
-            paymentAmounts: parsedPaymentAmounts
-        };
-
-        res.json({ 
-            success: true, 
-            message: 'Payment settings updated successfully',
-            settings: updatedSettings
-        });
-    } catch (error) {
-        console.error('Error updating payment settings:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Public endpoint to get payment settings for frontend
-app.get('/api/payment/settings', async function(req, res) {
-    try {
-        // Return payment settings for frontend use
-        const defaultSettings = {
-            bankName: 'HBL Bank',
-            accountTitle: 'Pak Nexus Services',
-            accountNumber: '1234-5678-9012-3456',
-            iban: 'PK36HABB0000001234567890',
-            branchCode: '1234',
-            swiftCode: 'HABBPKKA',
-            qrCodeImage: '',
-            paymentAmounts: {
-                shop: 5000,
-                institute: 10000,
-                hospital: 15000,
-                marketplace: 2000
-            }
-        };
-
-        res.json({ settings: defaultSettings });
-    } catch (error) {
-        console.error('Error fetching payment settings:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
 
 app.get('/', (req, res) => {
     res.send('Hello World');
