@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { ensureAuthenticated } = require('../middleware/auth');
 const PaymentRequest = require('../models/PaymentRequest');
+const upload = require('../middleware/upload');
 
 // Create a new payment request
-router.post('/create', ensureAuthenticated, async (req, res) => {
+router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot'), async (req, res) => {
   try {
     const {
       entityType,
@@ -17,42 +18,48 @@ router.post('/create', ensureAuthenticated, async (req, res) => {
       notes
     } = req.body;
 
-    // Validate required fields
-    if (!entityType || !amount || !transactionId || !bankName || !accountNumber || !transactionDate) {
+    // For screenshot-only payments, we'll use default values for required fields
+    const screenshotFile = req.file;
+    
+    if (!screenshotFile) {
       return res.status(400).json({ 
-        error: 'Missing required fields: entityType, amount, transactionId, bankName, accountNumber, transactionDate' 
+        error: 'Transaction screenshot is required' 
       });
     }
 
     // Validate entity type
     const validEntityTypes = ['shop', 'institute', 'hospital', 'marketplace'];
-    if (!validEntityTypes.includes(entityType)) {
+    if (!entityType || !validEntityTypes.includes(entityType)) {
       return res.status(400).json({ 
         error: 'Invalid entity type. Must be one of: shop, institute, hospital, marketplace' 
       });
     }
 
+    // Generate a unique transaction ID if not provided
+    const finalTransactionId = transactionId || `SCREENSHOT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     // Check if transaction ID already exists
-    const existingPayment = await PaymentRequest.findOne({ transactionId });
+    const existingPayment = await PaymentRequest.findOne({ transactionId: finalTransactionId });
     if (existingPayment) {
       return res.status(400).json({ 
         error: 'Transaction ID already exists. Please use a unique transaction ID.' 
       });
     }
 
-    // Create payment request
+    // Create payment request with screenshot
     const paymentRequest = new PaymentRequest({
       user: req.user._id,
       entityType,
       entityId: entityId || null,
-      amount: Number(amount),
-      transactionId: transactionId.trim(),
-      bankName: bankName.trim(),
-      accountNumber: accountNumber.trim(),
-      transactionDate: new Date(transactionDate),
-      notes: notes ? notes.trim() : '',
-      processingFee: 0, // No processing fee for now
-      totalAmount: Number(amount)
+      amount: Number(amount) || 0, // Default to 0 if not provided
+      transactionId: finalTransactionId,
+      bankName: bankName || 'Screenshot Payment',
+      accountNumber: accountNumber || 'N/A',
+      transactionDate: transactionDate ? new Date(transactionDate) : new Date(),
+      notes: notes ? notes.trim() : 'Payment via screenshot upload',
+      processingFee: 0,
+      totalAmount: Number(amount) || 0,
+      screenshotFile: screenshotFile.filename // Store the uploaded file name
     });
 
     await paymentRequest.save();

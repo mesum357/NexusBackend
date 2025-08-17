@@ -85,6 +85,11 @@ const paymentRequestSchema = new mongoose.Schema({
     required: true 
   },
   
+  // Screenshot file for payment verification
+  screenshotFile: { 
+    type: String 
+  },
+  
   // Timestamps
   createdAt: { 
     type: Date, 
