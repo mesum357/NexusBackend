@@ -125,18 +125,33 @@ passport.use(new LocalStrategy({
     passwordField: 'password'
 }, async function(username, password, done) {
     try {
-        const user = await User.findOne({ username: username });
+        console.log('🔐 Passport authentication attempt for:', username);
+        
+        // Try to find user by username first, then by email
+        let user = await User.findOne({ username: username });
         if (!user) {
+            // If not found by username, try by email
+            user = await User.findOne({ email: username });
+            console.log('🔍 User not found by username, trying email:', username);
+        }
+        
+        if (!user) {
+            console.log('❌ User not found by username or email:', username);
             return done(null, false, { message: 'Invalid username or password' });
         }
+        
+        console.log('✅ User found:', user.username, 'Verifying password...');
         
         const isPasswordValid = await user.authenticate(password);
         if (!isPasswordValid) {
+            console.log('❌ Password verification failed for user:', user.username);
             return done(null, false, { message: 'Invalid username or password' });
         }
         
+        console.log('✅ Password verified successfully for user:', user.username);
         return done(null, user);
     } catch (err) {
+        console.error('❌ Passport authentication error:', err);
         return done(err);
     }
 }));
@@ -351,20 +366,41 @@ app.get('/api/auth/me', (req, res) => {
 // Add /api/auth/register endpoint for admin panel
 app.post('/api/auth/register', upload.single('profileImage'), async function(req, res) {
     const { password, confirmPassword, email, fullName, mobile, city, username, isAdmin } = req.body;
-    console.log('Admin Register request body:', req.body);
-    console.log('Individual fields:', { password: !!password, confirmPassword: !!confirmPassword, email: !!email, fullName: !!fullName, mobile: !!mobile, city: !!city, username: !!username });
+    console.log('🚀 Admin Register request received');
+    console.log('📝 Request body:', req.body);
+    console.log('🔍 Individual fields:', { 
+        password: !!password, 
+        confirmPassword: !!confirmPassword, 
+        email: !!email, 
+        fullName: !!fullName, 
+        mobile: !!mobile, 
+        city: !!city, 
+        username: !!username 
+    });
     
     // Validation - make city optional for now
     if (!password || !confirmPassword || !email || !fullName || !mobile || !username) {
-        console.log('Validation failed for fields:', { password: !!password, confirmPassword: !!confirmPassword, email: !!email, fullName: !!fullName, mobile: !!mobile, username: !!username });
+        console.log('❌ Validation failed for fields:', { 
+            password: !!password, 
+            confirmPassword: !!confirmPassword, 
+            email: !!email, 
+            fullName: !!fullName, 
+            mobile: !!mobile, 
+            city: !!city, 
+            username: !!username 
+        });
         return res.status(400).json({ error: 'All fields are required' });
     }
     if (password !== confirmPassword) {
+        console.log('❌ Password mismatch');
         return res.status(400).json({ error: 'Passwords do not match' });
     }
     if (password.length < 6) {
+        console.log('❌ Password too short');
         return res.status(400).json({ error: 'Password must be at least 6 characters long' });
     }
+    
+    console.log('✅ Validation passed, creating user...');
     
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -381,14 +417,17 @@ app.post('/api/auth/register', upload.single('profileImage'), async function(req
         isAdmin: isAdmin || false
     };
     
+    console.log('👤 User data prepared:', userData);
+    
     // Add profile image if uploaded
     if (req.file) {
         userData.profileImage = req.file.path;
+        console.log('📸 Profile image added:', req.file.path);
     }
     
     User.register(userData, password, async function(err, user) {
         if (err) {
-            console.error('Admin Registration error:', err);
+            console.error('❌ Admin Registration error:', err);
             let errorMessage = 'Registration failed';
             if (err.name === 'UserExistsError') {
                 errorMessage = 'User already exists with this email or username';
@@ -396,10 +435,14 @@ app.post('/api/auth/register', upload.single('profileImage'), async function(req
             return res.status(400).json({ error: errorMessage });
         }
         
+        console.log('✅ User registered successfully:', user._id);
+        
         // Admin users don't need email verification
         user.verified = true;
         user.verificationToken = undefined;
         await user.save();
+        
+        console.log('✅ User saved and verified');
         
         return res.status(201).json({ 
             success: true, 
@@ -414,24 +457,44 @@ app.post('/api/auth/register', upload.single('profileImage'), async function(req
     });
 });
 
+
+
 // Add /api/auth/login endpoint for admin panel
 app.post('/api/auth/login', function(req, res, next) {
-    console.log('Login request body:', req.body);
+    console.log('🔐 Admin Login request received');
+    console.log('📝 Login request body:', req.body);
+    console.log('🔍 Login attempt for username/email:', req.body.username);
+    
     passport.authenticate("local", function(err, user, info) {
         if (err) {
+            console.error('❌ Passport authentication error:', err);
             return res.status(500).json({ error: 'Internal server error' });
         }
         if (!user) {
+            console.log('❌ Passport authentication failed - no user returned');
+            console.log('ℹ️ Passport info:', info);
             return res.status(401).json({ error: 'Invalid username or password' });
         }
+        
+        console.log('✅ Passport authentication successful for user:', user.username);
+        
         // In development, allow unverified users to login
         if (!user.verified && process.env.NODE_ENV !== 'development') {
+            console.log('❌ User not verified:', user.username);
             return res.status(401).json({ error: 'Please verify your email before logging in.' });
         }
+        
+        console.log('✅ User verified, logging in...');
+        
         req.logIn(user, function(err) {
             if (err) {
+                console.error('❌ Login error:', err);
                 return res.status(500).json({ error: 'Internal server error' });
             }
+            
+            console.log('✅ User logged in successfully:', user.username);
+            console.log('🔐 Session created for user:', user._id);
+            
             return res.status(200).json({ 
                 success: true, 
                 message: 'Login successful', 
