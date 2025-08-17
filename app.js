@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3001;
 require('dotenv').config();
 console.log('Loaded MONGODB_URI:', process.env.MONGODB_URI);
 const http = require('http');
@@ -832,6 +832,6 @@ if (!fs.existsSync(uploadsDir)) {
 // Serve uploaded images statically
 app.use('/uploads', express.static(uploadsDir));
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
