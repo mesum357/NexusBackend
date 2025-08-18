@@ -5,6 +5,8 @@ const Institute = require('../models/Institute');
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
 const PaymentRequest = require('../models/PaymentRequest');
+const User = require('../models/User');
+const bcrypt = require('bcrypt');
 
 // Get all pending entities for approval
 router.get('/pending-entities', ensureAdmin, async (req, res) => {
@@ -225,6 +227,91 @@ router.get('/stats', ensureAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error fetching admin stats:', error);
     res.status(500).json({ error: 'Failed to fetch admin statistics' });
+  }
+});
+
+// Update admin profile
+router.put('/profile', ensureAdmin, async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    
+    // Validate input
+    if (!username || !email) {
+      return res.status(400).json({ error: 'Username and email are required' });
+    }
+
+    // Check if username or email already exists (excluding current user)
+    const existingUser = await User.findOne({
+      $or: [
+        { username: username, _id: { $ne: req.user._id } },
+        { email: email, _id: { $ne: req.user._id } }
+      ]
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: 'Username or email already exists' 
+      });
+    }
+
+    // Update user profile
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { username, email },
+      { new: true, runValidators: true }
+    );
+
+    res.json({ 
+      success: true, 
+      message: 'Profile updated successfully',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Error updating admin profile:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Change admin password
+router.put('/change-password', ensureAdmin, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+
+    // Get current user with password
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    console.error('Error changing admin password:', error);
+    res.status(500).json({ error: 'Failed to change password' });
   }
 });
 
