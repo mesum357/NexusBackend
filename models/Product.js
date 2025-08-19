@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const productSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
   description: { type: String, required: true, trim: true },
+  agentId: { type: String }, // Optional agent ID
   price: { type: Number, required: true },
   priceType: { type: String, enum: ['fixed', 'negotiable', 'free'], default: 'fixed' },
   category: { type: String, required: true },

@@ -118,6 +118,10 @@ mongoose.connect(mongoURI, mongooseOptions)
     });
 
 const User = require('./models/User');
+const Institute = require('./models/Institute');
+const Shop = require('./models/Shop');
+const Product = require('./models/Product');
+const PaymentRequest = require('./models/PaymentRequest');
 
 // Passport configuration
 passport.use(new LocalStrategy({
@@ -647,14 +651,151 @@ app.get('/api/payment/settings', async function(req, res) {
     }
 });
 
+// Add public admin stats endpoint (no authentication required)
+app.get('/api/admin/public/stats', async function(req, res) {
+  try {
+    const [
+      totalInstitutes,
+      pendingInstitutes,
+      totalShops,
+      pendingShops,
+      totalProducts,
+      pendingProducts,
+      totalPaymentRequests,
+      pendingPaymentRequests
+    ] = await Promise.all([
+      Institute.countDocuments(),
+      Institute.countDocuments({ approvalStatus: 'pending' }),
+      Shop.countDocuments(),
+      Shop.countDocuments({ approvalStatus: 'pending' }),
+      Product.countDocuments(),
+      Product.countDocuments({ approvalStatus: 'pending' }),
+      PaymentRequest.countDocuments(),
+      PaymentRequest.countDocuments({ status: 'pending' })
+    ]);
 
+    res.json({
+      entities: {
+        institutes: { total: totalInstitutes, pending: pendingInstitutes },
+        shops: { total: totalShops, pending: pendingShops },
+        products: { total: totalProducts, pending: pendingProducts }
+      },
+      payments: {
+        total: totalPaymentRequests,
+        pending: pendingPaymentRequests
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching public admin stats:', error);
+    res.status(500).json({ error: 'Failed to fetch admin statistics' });
+  }
+});
 
+// Add public pending entities endpoint (no authentication required)
+app.get('/api/admin/public/pending-entities', async function(req, res) {
+  try {
+    const [pendingInstitutes, pendingShops, pendingProducts] = await Promise.all([
+      Institute.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
+      Shop.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
+      Product.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName')
+    ]);
 
+    res.json({
+      institutes: pendingInstitutes,
+      shops: pendingShops,
+      products: pendingProducts
+    });
+  } catch (error) {
+    console.error('Error fetching pending entities:', error);
+    res.status(500).json({ error: 'Failed to fetch pending entities' });
+  }
+});
 
+// Add public payment requests endpoint (no authentication required)
+app.get('/api/admin/public/payment-requests', async function(req, res) {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const status = req.query.status;
+    const entityType = req.query.entityType;
+    
+    const skip = (page - 1) * limit;
+    
+    // Build query
+    const query = {};
+    if (status) query.status = status;
+    if (entityType) query.entityType = entityType;
+    
+    const [paymentRequests, total] = await Promise.all([
+      PaymentRequest.find(query)
+        .populate('user', 'username email fullName')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      PaymentRequest.countDocuments(query)
+    ]);
+    
+    const totalPages = Math.ceil(total / limit);
+    
+    res.json({
+      paymentRequests,
+      totalPages,
+      currentPage: page,
+      total
+    });
+  } catch (error) {
+    console.error('Error fetching payment requests:', error);
+    res.status(500).json({ error: 'Failed to fetch payment requests' });
+  }
+});
 
-
-
-
+// Add public users endpoint (no authentication required)
+app.get('/api/admin/public/users', async function(req, res) {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search;
+    const role = req.query.role;
+    const verified = req.query.verified;
+    
+    const skip = (page - 1) * limit;
+    
+    // Build query
+    const query = {};
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { fullName: { $regex: search, $options: 'i' } }
+      ];
+    }
+    if (role === 'admin') query.isAdmin = true;
+    if (role === 'user') query.isAdmin = false;
+    if (verified === 'true') query.verified = true;
+    if (verified === 'false') query.verified = false;
+    
+    const [users, total] = await Promise.all([
+      User.find(query)
+        .select('-password')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      User.countDocuments(query)
+    ]);
+    
+    const totalPages = Math.ceil(total / limit);
+    
+    res.json({
+      users,
+      totalPages,
+      currentPage: page,
+      total
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
 
 
 app.get('/', (req, res) => {

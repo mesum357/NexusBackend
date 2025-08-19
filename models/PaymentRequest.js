@@ -22,6 +22,11 @@ const paymentRequestSchema = new mongoose.Schema({
     default: null 
   },
   
+  // Agent ID from the associated entity
+  agentId: { 
+    type: String 
+  },
+  
   // Payment details
   amount: { 
     type: Number, 

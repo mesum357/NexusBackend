@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { ensureAuthenticated } = require('../middleware/auth');
 const PaymentRequest = require('../models/PaymentRequest');
+const Institute = require('../models/Institute');
+const Shop = require('../models/Shop');
+const Product = require('../models/Product');
 const upload = require('../middleware/upload');
 
 // Create a new payment request
@@ -46,11 +49,37 @@ router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot
       });
     }
 
+    // Fetch Agent ID from the associated entity if entityId is provided
+    let agentId = null;
+    if (entityId) {
+      try {
+        let entity;
+        switch (entityType) {
+          case 'institute':
+          case 'hospital':
+            entity = await Institute.findById(entityId);
+            break;
+          case 'shop':
+            entity = await Shop.findById(entityId);
+            break;
+          case 'marketplace':
+            entity = await Product.findById(entityId);
+            break;
+        }
+        if (entity && entity.agentId) {
+          agentId = entity.agentId;
+        }
+      } catch (error) {
+        console.log('Could not fetch entity for Agent ID:', error.message);
+      }
+    }
+
     // Create payment request with screenshot
     const paymentRequest = new PaymentRequest({
       user: req.user._id,
       entityType,
       entityId: entityId || null,
+      agentId, // Include the Agent ID if found
       amount: Number(amount) || 0, // Default to 0 if not provided
       transactionId: finalTransactionId,
       bankName: bankName || 'Screenshot Payment',

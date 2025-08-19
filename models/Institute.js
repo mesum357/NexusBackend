@@ -33,6 +33,7 @@ const instituteSchema = new mongoose.Schema({
     ], 
     required: true 
   },
+  agentId: { type: String }, // Optional agent ID
   location: { type: String, required: true },
   city: { type: String, required: true },
   province: { type: String, required: true },
