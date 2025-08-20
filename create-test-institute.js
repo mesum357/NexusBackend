@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Institute = require('./models/Institute');
 const User = require('./models/User');
+const { generateInstituteAgentId } = require('./utils/agentIdGenerator');
 
 async function createTestInstitute() {
   try {
@@ -41,7 +42,9 @@ async function createTestInstitute() {
       rating: 4.5,
       totalReviews: 0,
       admissionStatus: 'Open',
-      establishedYear: 2024
+      establishedYear: 2024,
+      // Generate unique Agent ID for the test institute
+      agentId: generateInstituteAgentId('Test University')
     });
 
     const savedInstitute = await testInstitute.save();
@@ -50,7 +53,8 @@ async function createTestInstitute() {
       name: savedInstitute.name,
       owner: savedInstitute.owner,
       city: savedInstitute.city,
-      province: savedInstitute.province
+      province: savedInstitute.province,
+      agentId: savedInstitute.agentId
     });
 
     return savedInstitute;

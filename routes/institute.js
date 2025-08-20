@@ -7,6 +7,7 @@ const Institute = require('../models/Institute');
 const Review = require('../models/Review');
 const { ensureAuthenticated } = require('../middleware/auth');
 const { upload, cloudinary, validateCloudinaryConfig } = require('../middleware/cloudinary');
+const { generateInstituteAgentId } = require('../utils/agentIdGenerator');
 const StudentApplication = require('../models/StudentApplication');
 const InstituteNotification = require('../models/InstituteNotification');
 const InstituteMessage = require('../models/InstituteMessage');
@@ -178,7 +179,9 @@ router.post('/create', (req, res, next) => {
       ownerPhone: req.user.phone || '',
       verified: false,
       rating: 4.5,
-      totalReviews: 0
+      totalReviews: 0,
+      // Generate unique Agent ID for the institute
+      agentId: generateInstituteAgentId(name)
     };
     // Allow frontend to set domain; default to education
     if (req.body.domain && ['education','healthcare'].includes(req.body.domain)) {
@@ -186,6 +189,7 @@ router.post('/create', (req, res, next) => {
     }
 
     console.log('Creating institute with data:', instituteData);
+    console.log('Generated Agent ID:', instituteData.agentId);
 
     let savedInstitute;
     try {

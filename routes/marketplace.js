@@ -6,6 +6,7 @@ const fs = require('fs');
 const Product = require('../models/Product');
 const { ensureAuthenticated } = require('../middleware/auth');
 const { upload: cloudinaryUpload, cloudinary } = require('../middleware/cloudinary');
+const { generateProductAgentId } = require('../utils/agentIdGenerator');
 
 // File filter for image uploads
 const fileFilter = (req, file, cb) => {
@@ -195,9 +196,12 @@ router.post('/', ensureAuthenticated, upload.array('images', 10), async (req, re
       owner: req.user._id,
       ownerName: req.user.fullName || req.user.username || req.user.email,
       ownerPhone: ownerPhone || req.user.phone || '',
-      ownerEmail: ownerEmail || req.user.email || ''
+      ownerEmail: ownerEmail || req.user.email || '',
+      // Generate unique Agent ID for the product
+      agentId: generateProductAgentId(title)
     });
 
+    console.log('Creating product with Agent ID:', product.agentId);
     await product.save();
     res.status(201).json({ 
       message: 'Product created successfully and is pending admin approval',

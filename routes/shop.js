@@ -6,6 +6,7 @@ const fs = require('fs');
 const Shop = require('../models/Shop');
 const { ensureAuthenticated } = require('../middleware/auth');
 const { upload: cloudinaryUpload, cloudinary } = require('../middleware/cloudinary');
+const { generateShopAgentId } = require('../utils/agentIdGenerator');
 
 // File filter for image uploads
 const fileFilter = (req, file, cb) => {
@@ -64,8 +65,12 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
       },
       owner: req.user._id,
       ownerName: req.user.username || req.user.email || '',
-      ownerDp: req.user.profileImage || ''
+      ownerDp: req.user.profileImage || '',
+      // Generate unique Agent ID for the shop
+      agentId: generateShopAgentId(shopName)
     });
+
+    console.log('Creating shop with Agent ID:', shop.agentId);
 
     await shop.save();
     res.status(201).json({ 
