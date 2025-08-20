@@ -68,10 +68,15 @@ router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot
         }
         if (entity && entity.agentId) {
           agentId = entity.agentId;
+          console.log(`Found Agent ID: ${agentId} for ${entityType} ${entityId}`);
+        } else {
+          console.log(`No Agent ID found for ${entityType} ${entityId}`);
         }
       } catch (error) {
         console.log('Could not fetch entity for Agent ID:', error.message);
       }
+    } else {
+      console.log('No entityId provided, skipping Agent ID lookup');
     }
 
     // Create payment request with screenshot

@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8080;
 require('dotenv').config();
 console.log('Loaded MONGODB_URI:', process.env.MONGODB_URI);
 const http = require('http');
@@ -700,14 +700,126 @@ app.get('/api/admin/public/pending-entities', async function(req, res) {
       Product.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName')
     ]);
 
+    // Add entityType field to each entity
+    const institutesWithType = pendingInstitutes.map(inst => ({
+      ...inst.toObject(),
+      entityType: 'institute'
+    }));
+    
+    const shopsWithType = pendingShops.map(shop => ({
+      ...shop.toObject(),
+      entityType: 'shop'
+    }));
+    
+    const productsWithType = pendingProducts.map(product => ({
+      ...product.toObject(),
+      entityType: 'product'
+    }));
+
     res.json({
-      institutes: pendingInstitutes,
-      shops: pendingShops,
-      products: pendingProducts
+      institutes: institutesWithType,
+      shops: shopsWithType,
+      products: productsWithType
     });
   } catch (error) {
     console.error('Error fetching pending entities:', error);
     res.status(500).json({ error: 'Failed to fetch pending entities' });
+  }
+});
+
+// Add public approval endpoints (no authentication required for testing)
+app.put('/api/admin/public/institute/:id/approval', async function(req, res) {
+  try {
+    const { status, notes } = req.body;
+    
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be "approved" or "rejected"' });
+    }
+
+    const institute = await Institute.findById(req.params.id);
+    if (!institute) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+
+    institute.approvalStatus = status;
+    institute.approvalNotes = notes || '';
+    institute.approvedAt = new Date();
+    
+    // If approved, also set verified to true
+    if (status === 'approved') {
+      institute.verified = true;
+    }
+
+    await institute.save();
+
+    res.json({ 
+      success: true, 
+      message: `Institute ${status} successfully`,
+      institute 
+    });
+  } catch (error) {
+    console.error('Error updating institute approval:', error);
+    res.status(500).json({ error: 'Failed to update institute approval' });
+  }
+});
+
+app.put('/api/admin/public/shop/:id/approval', async function(req, res) {
+  try {
+    const { status, notes } = req.body;
+    
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be "approved" or "rejected"' });
+    }
+
+    const shop = await Shop.findById(req.params.id);
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    shop.approvalStatus = status;
+    shop.approvalNotes = notes || '';
+    shop.approvedAt = new Date();
+
+    await shop.save();
+
+    res.json({ 
+      success: true, 
+      message: `Shop ${status} successfully`,
+      shop 
+    });
+  } catch (error) {
+    console.error('Error updating shop approval:', error);
+    res.status(500).json({ error: 'Failed to update shop approval' });
+  }
+});
+
+app.put('/api/admin/public/product/:id/approval', async function(req, res) {
+  try {
+    const { status, notes } = req.body;
+    
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be "approved" or "rejected"' });
+    }
+
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    product.approvalStatus = status;
+    product.approvalNotes = notes || '';
+    product.approvedAt = new Date();
+
+    await product.save();
+
+    res.json({ 
+      success: true, 
+      message: `Product ${status} successfully`,
+      product 
+    });
+  } catch (error) {
+    console.error('Error updating product approval:', error);
+    res.status(500).json({ error: 'Failed to update product approval' });
   }
 });
 
@@ -735,10 +847,65 @@ app.get('/api/admin/public/payment-requests', async function(req, res) {
       PaymentRequest.countDocuments(query)
     ]);
     
+    // Populate Agent IDs from associated entities for payment requests that don't have them
+    const enhancedPaymentRequests = await Promise.all(
+      paymentRequests.map(async (payment) => {
+        console.log(`\n🔍 Processing payment ${payment._id}:`);
+        console.log(`   Current agentId: ${payment.agentId}`);
+        console.log(`   Entity Type: ${payment.entityType}`);
+        console.log(`   Entity ID: ${payment.entityId}`);
+        
+        // If payment already has agentId, use it
+        if (payment.agentId) {
+          console.log(`   ✅ Payment already has agentId: ${payment.agentId}`);
+          return payment;
+        }
+        
+        // Try to fetch agentId from associated entity
+        if (payment.entityId) {
+          try {
+            let entity;
+            switch (payment.entityType) {
+              case 'institute':
+              case 'hospital':
+                entity = await Institute.findById(payment.entityId);
+                break;
+              case 'shop':
+                entity = await Shop.findById(payment.entityId);
+                break;
+              case 'marketplace':
+                entity = await Product.findById(payment.entityId);
+                break;
+            }
+            if (entity && entity.agentId) {
+              payment.agentId = entity.agentId;
+              console.log(`   ✅ Found Agent ID ${entity.agentId} for payment ${payment._id} from ${payment.entityType} ${payment.entityId}`);
+            } else if (entity) {
+              console.log(`   ⚠️ Entity found for payment ${payment._id} but no Agent ID set: ${entity.name || entity.shopName || entity.title}`);
+            } else {
+              console.log(`   ❌ No entity found for payment ${payment._id} with entityId: ${payment.entityId}`);
+            }
+          } catch (error) {
+            console.log(`   ❌ Error fetching entity for payment ${payment._id}:`, error.message);
+          }
+        } else {
+          console.log(`   ⚠️ Payment ${payment._id} has no entityId, skipping Agent ID lookup`);
+        }
+        
+        console.log(`   Final agentId: ${payment.agentId}`);
+        return payment;
+      })
+    );
+    
+    console.log('\n📊 Final enhanced payment requests:');
+    enhancedPaymentRequests.forEach((payment, index) => {
+      console.log(`   ${index + 1}. Payment ${payment._id}: agentId = ${payment.agentId || 'N/A'}`);
+    });
+    
     const totalPages = Math.ceil(total / limit);
     
     res.json({
-      paymentRequests,
+      paymentRequests: enhancedPaymentRequests,
       totalPages,
       currentPage: page,
       total
