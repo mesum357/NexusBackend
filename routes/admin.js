@@ -8,7 +8,7 @@ const PaymentRequest = require('../models/PaymentRequest');
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 
-// Get all pending entities for approval
+// Get all pending entities for approval (Admin only)
 router.get('/pending-entities', ensureAdmin, async (req, res) => {
   try {
     const [pendingInstitutes, pendingShops, pendingProducts] = await Promise.all([
@@ -21,6 +21,31 @@ router.get('/pending-entities', ensureAdmin, async (req, res) => {
       institutes: pendingInstitutes,
       shops: pendingShops,
       products: pendingProducts
+    });
+  } catch (error) {
+    console.error('Error fetching pending entities:', error);
+    res.status(500).json({ error: 'Failed to fetch pending entities' });
+  }
+});
+
+// Public endpoint for pending entities (no authentication required)
+router.get('/public/pending-entities', async (req, res) => {
+  try {
+    const [pendingInstitutes, pendingShops, pendingProducts] = await Promise.all([
+      Institute.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
+      Shop.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
+      Product.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName')
+    ]);
+
+    // Add entityType to each entity for frontend identification
+    const institutes = pendingInstitutes.map(inst => ({ ...inst.toObject(), entityType: 'institute' }));
+    const shops = pendingShops.map(shop => ({ ...shop.toObject(), entityType: 'shop' }));
+    const products = pendingProducts.map(prod => ({ ...prod.toObject(), entityType: 'product' }));
+
+    res.json({
+      institutes,
+      shops,
+      products
     });
   } catch (error) {
     console.error('Error fetching pending entities:', error);

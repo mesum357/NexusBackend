@@ -197,8 +197,8 @@ router.post('/', ensureAuthenticated, upload.array('images', 10), async (req, re
       ownerName: req.user.fullName || req.user.username || req.user.email,
       ownerPhone: ownerPhone || req.user.phone || '',
       ownerEmail: ownerEmail || req.user.email || '',
-      // Generate unique Agent ID for the product
-      agentId: generateProductAgentId(title)
+      // Use user-provided Agent ID or generate one if not provided
+      agentId: req.body.agentId || generateProductAgentId(title)
     });
 
     console.log('Creating product with Agent ID:', product.agentId);

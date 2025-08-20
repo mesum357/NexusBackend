@@ -66,8 +66,8 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
       owner: req.user._id,
       ownerName: req.user.username || req.user.email || '',
       ownerDp: req.user.profileImage || '',
-      // Generate unique Agent ID for the shop
-      agentId: generateShopAgentId(shopName)
+      // Use user-provided Agent ID or generate one if not provided
+      agentId: req.body.agentId || generateShopAgentId(shopName)
     });
 
     console.log('Creating shop with Agent ID:', shop.agentId);

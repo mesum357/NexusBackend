@@ -180,8 +180,8 @@ router.post('/create', (req, res, next) => {
       verified: false,
       rating: 4.5,
       totalReviews: 0,
-      // Generate unique Agent ID for the institute
-      agentId: generateInstituteAgentId(name)
+      // Use user-provided Agent ID or generate one if not provided
+      agentId: req.body.agentId || generateInstituteAgentId(name)
     };
     // Allow frontend to set domain; default to education
     if (req.body.domain && ['education','healthcare'].includes(req.body.domain)) {
