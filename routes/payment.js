@@ -52,6 +52,11 @@ router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot
     // Get Agent ID from request body or from associated entity if entityId is provided
     let agentId = req.body.agentId || null;
     
+    // Handle empty string Agent ID - convert to null
+    if (agentId === '' || agentId === 'null' || agentId === 'undefined') {
+      agentId = null;
+    }
+    
     if (!agentId && entityId) {
       // Fetch Agent ID from the associated entity if entityId is provided
       try {
