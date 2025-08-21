@@ -49,9 +49,11 @@ router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot
       });
     }
 
-    // Fetch Agent ID from the associated entity if entityId is provided
-    let agentId = null;
-    if (entityId) {
+    // Get Agent ID from request body or from associated entity if entityId is provided
+    let agentId = req.body.agentId || null;
+    
+    if (!agentId && entityId) {
+      // Fetch Agent ID from the associated entity if entityId is provided
       try {
         let entity;
         switch (entityType) {
@@ -75,8 +77,10 @@ router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot
       } catch (error) {
         console.log('Could not fetch entity for Agent ID:', error.message);
       }
+    } else if (agentId) {
+      console.log(`Using Agent ID from request body: ${agentId}`);
     } else {
-      console.log('No entityId provided, skipping Agent ID lookup');
+      console.log('No Agent ID provided');
     }
 
     // Create payment request with screenshot
