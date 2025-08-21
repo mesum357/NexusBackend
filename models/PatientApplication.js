@@ -1,15 +1,17 @@
 const mongoose = require('mongoose');
 
 const patientApplicationSchema = new mongoose.Schema({
-  hospital: { type: mongoose.Schema.Types.ObjectId, ref: 'Institute', required: true },
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  hospital: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', required: true },
+  patient: { type: mongoose.Schema.Types.ObjectId, ref: 'Users', required: true },
   patientName: { type: String, required: true },
-  fatherName: { type: String, required: true },
-  cnic: { type: String, required: true },
-  city: { type: String, required: true },
-  department: { type: String, required: true },
-  profileImage: { type: String }, // Cloudinary URL
-  status: { type: String, enum: ['submitted', 'review', 'accepted', 'rejected'], default: 'submitted' },
+  patientAge: { type: Number, required: true },
+  patientGender: { type: String, enum: ['Male', 'Female', 'Other'], required: true },
+  contactNumber: { type: String, required: true },
+  emergencyContact: { type: String },
+  medicalHistory: { type: String },
+  symptoms: { type: String },
+  preferredDate: { type: Date },
+  status: { type: String, enum: ['pending', 'approved', 'rejected', 'completed'], default: 'pending' },
   notes: { type: String }, // Admin notes for approval/rejection
 }, { timestamps: true });
 

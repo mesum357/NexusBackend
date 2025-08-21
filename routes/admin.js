@@ -2,23 +2,26 @@ const express = require('express');
 const router = express.Router();
 const { ensureAuthenticated, ensureAdmin } = require('../middleware/auth');
 const Institute = require('../models/Institute');
+const Hospital = require('../models/Hospital');
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
 const PaymentRequest = require('../models/PaymentRequest');
-const User = require('../models/User');
+const Users = require('../models/User');
 const bcrypt = require('bcrypt');
 
 // Get all pending entities for approval (Admin only)
 router.get('/pending-entities', ensureAdmin, async (req, res) => {
   try {
-    const [pendingInstitutes, pendingShops, pendingProducts] = await Promise.all([
+    const [pendingInstitutes, pendingHospitals, pendingShops, pendingProducts] = await Promise.all([
       Institute.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
+      Hospital.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
       Shop.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
       Product.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName')
     ]);
 
     res.json({
       institutes: pendingInstitutes,
+      hospitals: pendingHospitals,
       shops: pendingShops,
       products: pendingProducts
     });
@@ -31,19 +34,22 @@ router.get('/pending-entities', ensureAdmin, async (req, res) => {
 // Public endpoint for pending entities (no authentication required)
 router.get('/public/pending-entities', async (req, res) => {
   try {
-    const [pendingInstitutes, pendingShops, pendingProducts] = await Promise.all([
+    const [pendingInstitutes, pendingHospitals, pendingShops, pendingProducts] = await Promise.all([
       Institute.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
+      Hospital.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
       Shop.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
       Product.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName')
     ]);
 
     // Add entityType to each entity for frontend identification
     const institutes = pendingInstitutes.map(inst => ({ ...inst.toObject(), entityType: 'institute' }));
+    const hospitals = pendingHospitals.map(hosp => ({ ...hosp.toObject(), entityType: 'hospital' }));
     const shops = pendingShops.map(shop => ({ ...shop.toObject(), entityType: 'shop' }));
     const products = pendingProducts.map(prod => ({ ...prod.toObject(), entityType: 'product' }));
 
     res.json({
       institutes,
+      hospitals,
       shops,
       products
     });
@@ -119,6 +125,43 @@ router.put('/shop/:id/approval', ensureAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error updating shop approval:', error);
     res.status(500).json({ error: 'Failed to update shop approval' });
+  }
+});
+
+// Approve/Reject Hospital
+router.put('/hospital/:id/approval', ensureAdmin, async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be "approved" or "rejected"' });
+    }
+
+    const hospital = await Hospital.findById(req.params.id);
+    if (!hospital) {
+      return res.status(404).json({ error: 'Hospital not found' });
+    }
+
+    hospital.approvalStatus = status;
+    hospital.approvalNotes = notes || '';
+    hospital.approvedBy = req.user._id;
+    hospital.approvedAt = new Date();
+    
+    // If approved, also set verified to true
+    if (status === 'approved') {
+      hospital.verified = true;
+    }
+
+    await hospital.save();
+
+    res.json({ 
+      success: true, 
+      message: `Hospital ${status} successfully`,
+      hospital 
+    });
+  } catch (error) {
+    console.error('Error updating hospital approval:', error);
+    res.status(500).json({ error: 'Failed to update hospital approval' });
   }
 });
 
@@ -266,7 +309,7 @@ router.put('/profile', ensureAdmin, async (req, res) => {
     }
 
     // Check if username or email already exists (excluding current user)
-    const existingUser = await User.findOne({
+    const existingUser = await Users.findOne({
       $or: [
         { username: username, _id: { $ne: req.user._id } },
         { email: email, _id: { $ne: req.user._id } }
@@ -280,7 +323,7 @@ router.put('/profile', ensureAdmin, async (req, res) => {
     }
 
     // Update user profile
-    const updatedUser = await User.findByIdAndUpdate(
+    const updatedUser = await Users.findByIdAndUpdate(
       req.user._id,
       { username, email },
       { new: true, runValidators: true }
@@ -312,7 +355,7 @@ router.put('/change-password', ensureAdmin, async (req, res) => {
     }
 
     // Get current user with password
-    const user = await User.findById(req.user._id);
+    const user = await Users.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }

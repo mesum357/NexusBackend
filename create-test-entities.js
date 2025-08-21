@@ -5,7 +5,7 @@
 const mongoose = require('mongoose');
 const Shop = require('./models/Shop');
 const Product = require('./models/Product');
-const User = require('./models/User');
+const Users = require('./models/User');
 const { generateShopAgentId, generateProductAgentId } = require('./utils/agentIdGenerator');
 
 // Connect to MongoDB
@@ -19,7 +19,7 @@ async function createTestEntities() {
     console.log('🔄 Creating test entities with Agent IDs...\n');
 
     // First, check if we have any users
-    const users = await User.find({}).limit(1);
+    const users = await Users.find({}).limit(1);
     if (users.length === 0) {
       console.log('❌ No users found. Please create a user first.');
       return;

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Institute = require('../models/Institute');
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
-const User = require('../models/User');
+const Users = require('../models/User');
 const Post = require('../models/Post');
 require('dotenv').config();
 
@@ -78,7 +78,7 @@ const testAllRoutes = async () => {
     
     // Test Users
     console.log('\n👤 Testing Users...');
-    const users = await User.find({});
+    const users = await Users.find({});
     console.log(`Found ${users.length} users`);
     
     const usersWithLocalImages = users.filter(u => 

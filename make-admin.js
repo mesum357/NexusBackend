@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const User = require('./models/User');
+const Users = require('./models/User');
 
 async function makeUserAdmin(email) {
   try {
@@ -7,7 +7,7 @@ async function makeUserAdmin(email) {
     console.log('Connected to MongoDB');
 
     // Find user by email
-    const user = await User.findOne({ email: email });
+    const user = await Users.findOne({ email: email });
     if (!user) {
       console.log('❌ User not found with email:', email);
       return;

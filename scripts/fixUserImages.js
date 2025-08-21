@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const User = require('../models/User');
+const Users = require('../models/User');
 const Post = require('../models/Post');
 require('dotenv').config();
 
@@ -13,7 +13,7 @@ const fixUserImages = async () => {
   try {
     console.log('Fixing existing user profile images...');
     
-    const users = await User.find({
+    const users = await Users.find({
       profileImage: { $regex: '^/uploads/' }
     });
     
@@ -23,7 +23,7 @@ const fixUserImages = async () => {
       console.log(`\nFixing user: ${user.username || user.email}`);
       
       // Remove broken profile image path
-      await User.findByIdAndUpdate(user._id, { profileImage: '' });
+      await Users.findByIdAndUpdate(user._id, { profileImage: '' });
       console.log(`Removed broken profile image: ${user.profileImage}`);
     }
     

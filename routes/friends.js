@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Friend = require('../models/Friend');
-const User = require('../models/User');
+const Users = require('../models/User');
 const { ensureAuthenticated } = require('../middleware/auth');
 
 // Get all friends data (friends, suggestions, requests)
@@ -31,7 +31,7 @@ router.get('/', ensureAuthenticated, async (req, res) => {
     }).populate('friend', 'username fullName email profileImage city');
 
     // Get all users for suggestions (excluding current user and existing friends/requests)
-    const allUsers = await User.find({ _id: { $ne: userId } });
+    const allUsers = await Users.find({ _id: { $ne: userId } });
     
     // Get all friend relationships for current user
     const allFriendRelationships = await Friend.find({

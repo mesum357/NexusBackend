@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
+const Users = require('../models/User');
 const { ensureAuthenticated } = require('../middleware/auth');
 
 // Follow a user
@@ -19,13 +19,13 @@ router.post('/:userId', ensureAuthenticated, async (req, res) => {
     }
 
     // Check if user to follow exists
-    const userToFollow = await User.findById(userIdToFollow);
+    const userToFollow = await Users.findById(userIdToFollow);
     if (!userToFollow) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Check if already following
-    const currentUser = await User.findById(followerId);
+    const currentUser = await Users.findById(followerId);
     if (!currentUser) {
       return res.status(404).json({ error: 'Current user not found' });
     }
@@ -35,11 +35,11 @@ router.post('/:userId', ensureAuthenticated, async (req, res) => {
     }
 
     // Add to following and followers
-    await User.findByIdAndUpdate(followerId, {
+    await Users.findByIdAndUpdate(followerId, {
       $addToSet: { following: userIdToFollow }
     });
 
-    await User.findByIdAndUpdate(userIdToFollow, {
+    await Users.findByIdAndUpdate(userIdToFollow, {
       $addToSet: { followers: followerId }
     });
 
@@ -61,11 +61,11 @@ router.delete('/:userId', ensureAuthenticated, async (req, res) => {
     }
 
     // Remove from following and followers
-    await User.findByIdAndUpdate(followerId, {
+    await Users.findByIdAndUpdate(followerId, {
       $pull: { following: userIdToUnfollow }
     });
 
-    await User.findByIdAndUpdate(userIdToUnfollow, {
+    await Users.findByIdAndUpdate(userIdToUnfollow, {
       $pull: { followers: followerId }
     });
 
@@ -85,7 +85,7 @@ router.get('/followers/:userId', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
     
-    const user = await User.findById(userId).populate('followers', 'username fullName email profileImage city');
+    const user = await Users.findById(userId).populate('followers', 'username fullName email profileImage city');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -107,7 +107,7 @@ router.get('/following/:userId', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
     
-    const user = await User.findById(userId).populate('following', 'username fullName email profileImage city');
+    const user = await Users.findById(userId).populate('following', 'username fullName email profileImage city');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -124,7 +124,7 @@ router.get('/following/:userId', async (req, res) => {
 router.get('/suggestions', ensureAuthenticated, async (req, res) => {
   try {
     const currentUserId = req.user._id;
-    const currentUser = await User.findById(currentUserId);
+    const currentUser = await Users.findById(currentUserId);
     
     if (!currentUser) {
       return res.status(404).json({ error: 'Current user not found' });
@@ -134,7 +134,7 @@ router.get('/suggestions', ensureAuthenticated, async (req, res) => {
     const followingIds = currentUser.following || [];
     
     // Get users that are not being followed by current user (excluding current user)
-    const suggestedUsers = await User.find({
+    const suggestedUsers = await Users.find({
       _id: { 
         $nin: [...followingIds, currentUserId] 
       }
@@ -146,7 +146,7 @@ router.get('/suggestions', ensureAuthenticated, async (req, res) => {
     // Add follower count to each user
     const usersWithFollowerCount = await Promise.all(
       suggestedUsers.map(async (user) => {
-        const followerCount = await User.countDocuments({ following: user._id });
+        const followerCount = await Users.countDocuments({ following: user._id });
         return {
           _id: user._id,
           username: user.username,
@@ -176,7 +176,7 @@ router.get('/check/:userId', ensureAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'User ID to check is required' });
     }
     
-    const currentUser = await User.findById(currentUserId);
+    const currentUser = await Users.findById(currentUserId);
     if (!currentUser) {
       return res.status(404).json({ error: 'Current user not found' });
     }

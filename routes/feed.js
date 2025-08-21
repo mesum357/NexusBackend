@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
-const User = require('../models/User');
+const Users = require('../models/User');
 const Notification = require('../models/Notification');
 
 const { ensureAuthenticated } = require('../middleware/auth');
@@ -370,7 +370,7 @@ router.get('/trending-hashtags', async (req, res) => {
 router.get('/user/:username', async (req, res) => {
   try {
     const { username } = req.params;
-    const user = await User.findOne({ username }).select('-password');
+    const user = await Users.findOne({ username }).select('-password');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -390,7 +390,7 @@ router.put('/profile/update', ensureAuthenticated, upload.single('profileImage')
     const { fullName, email, mobile, city, bio, website, currentPassword, newPassword } = req.body;
     
     // Find the user
-    const user = await User.findById(userId);
+    const user = await Users.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -428,7 +428,7 @@ router.put('/profile/update', ensureAuthenticated, upload.single('profileImage')
     await user.save();
 
     // Return updated user data (without password)
-    const updatedUser = await User.findById(userId).select('-password');
+    const updatedUser = await Users.findById(userId).select('-password');
     
     res.json({ 
       success: true, 

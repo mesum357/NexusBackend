@@ -3,6 +3,7 @@ const router = express.Router();
 const { ensureAuthenticated } = require('../middleware/auth');
 const PaymentRequest = require('../models/PaymentRequest');
 const Institute = require('../models/Institute');
+const Hospital = require('../models/Hospital');
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
 const upload = require('../middleware/upload');
@@ -63,8 +64,10 @@ router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot
         let entity;
         switch (entityType) {
           case 'institute':
-          case 'hospital':
             entity = await Institute.findById(entityId);
+            break;
+          case 'hospital':
+            entity = await Hospital.findById(entityId);
             break;
           case 'shop':
             entity = await Shop.findById(entityId);

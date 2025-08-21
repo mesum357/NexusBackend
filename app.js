@@ -21,6 +21,7 @@ const cors = require('cors');
 const shopRoutes = require('./routes/shop');
 const shopWizardRoutes = require('./routes/shop-wizard');
 const instituteRoutes = require('./routes/institute');
+const hospitalRoutes = require('./routes/hospital');
 const feedRoutes = require('./routes/feed');
 const friendsRoutes = require('./routes/friends');
 const followRoutes = require('./routes/follow');
@@ -78,7 +79,7 @@ app.use(session({
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
   },
   store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
+    mongoUrl: process.env.MONGODB_URI || 'mongodb+srv://ahmed357:pDliM118811@cluster0.vtangzf.mongodb.net/',
     collectionName: 'sessions',
     ttl: 60 * 60 * 24 * 7, // 7 days
   }),
@@ -102,7 +103,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Get MongoDB URI from environment or use default
-const mongoURI = process.env.MONGODB_URI;
+const mongoURI = process.env.MONGODB_URI || 'mongodb+srv://ahmed357:pDliM118811@cluster0.vtangzf.mongodb.net/';
 if (!mongoURI) {
     console.error("MONGODB_URI is not defined in environment variables");
     process.exit(1);
@@ -117,7 +118,7 @@ mongoose.connect(mongoURI, mongooseOptions)
         process.exit(1);
     });
 
-const User = require('./models/User');
+const Users = require('./models/User');
 const Institute = require('./models/Institute');
 const Shop = require('./models/Shop');
 const Product = require('./models/Product');
@@ -132,10 +133,10 @@ passport.use(new LocalStrategy({
         console.log('🔐 Passport authentication attempt for:', username);
         
         // Try to find user by username first, then by email
-        let user = await User.findOne({ username: username });
+        let user = await Users.findOne({ username: username });
         if (!user) {
             // If not found by username, try by email
-            user = await User.findOne({ email: username });
+            user = await Users.findOne({ email: username });
             console.log('🔍 User not found by username, trying email:', username);
         }
         
@@ -166,7 +167,7 @@ passport.serializeUser(function(user, done) {
 
 passport.deserializeUser(async function(id, done) {
     try {
-        const user = await User.findById(id);
+        const user = await Users.findById(id);
         done(null, user);
     } catch (err) {
         done(err, null);
@@ -184,10 +185,10 @@ passport.use(new GoogleStrategy({
 },
 async function(req, accessToken, refreshToken, profile, done) {
     try {
-        let user = await User.findOne({ googleId: profile.id });
+        let user = await Users.findOne({ googleId: profile.id });
         
         if (!user) {
-            user = await User.create({
+            user = await Users.create({
                 googleId: profile.id,
                 username: profile.emails[0].value,
                 email: profile.emails[0].value
@@ -274,7 +275,7 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
         userData.profileImage = req.file.path; // Cloudinary URL
     }
     
-    User.register(userData, password, async function(err, user) {
+    Users.register(userData, password, async function(err, user) {
         if (err) {
             console.error('Registration error:', err); // Log registration errors
             let errorMessage = 'Registration failed';
@@ -302,7 +303,7 @@ app.get('/verify-email', async (req, res) => {
     if (!token) {
         return res.redirect('/login?error=Invalid or missing verification token.');
     }
-    const user = await User.findOne({ verificationToken: token });
+    const user = await Users.findOne({ verificationToken: token });
     if (!user) {
         return res.redirect('/login?error=Invalid or expired verification token.');
     }
@@ -429,7 +430,7 @@ app.post('/api/auth/register', upload.single('profileImage'), async function(req
         console.log('📸 Profile image added:', req.file.path);
     }
     
-    User.register(userData, password, async function(err, user) {
+    Users.register(userData, password, async function(err, user) {
         if (err) {
             console.error('❌ Admin Registration error:', err);
             let errorMessage = 'Registration failed';
@@ -942,12 +943,12 @@ app.get('/api/admin/public/users', async function(req, res) {
     if (verified === 'false') query.verified = false;
     
     const [users, total] = await Promise.all([
-      User.find(query)
+      Users.find(query)
         .select('-password')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      User.countDocuments(query)
+      Users.countDocuments(query)
     ]);
     
     const totalPages = Math.ceil(total / limit);
@@ -975,7 +976,7 @@ app.post('/forgot-password', async (req, res) => {
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }
-  const user = await User.findOne({ email });
+  const user = await Users.findOne({ email });
   if (!user) {
     // For security, always respond with success
     return res.status(200).json({ message: 'If your email is registered, you’ll receive a reset link shortly.' });
@@ -1009,7 +1010,7 @@ app.post('/reset-password', async (req, res) => {
   if (password.length < 6) {
     return res.status(400).json({ error: 'Password must be at least 6 characters long' });
   }
-  const user = await User.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: Date.now() } });
+  const user = await Users.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: Date.now() } });
   if (!user) {
     return res.status(400).json({ error: 'Invalid or expired reset token' });
   }
@@ -1121,6 +1122,7 @@ app.post('/api/admin/approve-entity', async function(req, res) {
 app.use('/api/shop', shopRoutes);
 app.use('/api/shop-wizard', shopWizardRoutes);
 app.use('/api/institute', instituteRoutes);
+app.use('/api/hospital', hospitalRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/follow', followRoutes);

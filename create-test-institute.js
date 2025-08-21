@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const Institute = require('./models/Institute');
-const User = require('./models/User');
+const Users = require('./models/User');
 const { generateInstituteAgentId } = require('./utils/agentIdGenerator');
 
 async function createTestInstitute() {
@@ -9,7 +9,7 @@ async function createTestInstitute() {
     console.log('Connected to MongoDB');
 
     // First, check if we have any users
-    const users = await User.find({}).limit(1);
+    const users = await Users.find({}).limit(1);
     if (users.length === 0) {
       console.log('❌ No users found. Please create a user first.');
       return;
