@@ -60,8 +60,8 @@ app.use(express.static('public'));
 
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? [process.env.FRONTEND_URL, /\.railway\.app$/]
-    : ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:8083', 'http://localhost:8082', 'http://localhost:3001'],
+    ? [process.env.FRONTEND_URL, /\.railway\.app$/, 'https://pakistanonlines.com', 'http://pakistanonlines.com']
+    : ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:8083', 'http://localhost:8082', 'http://localhost:3001', 'https://pakistanonlines.com', 'http://pakistanonlines.com'],
   credentials: true,
 }));
 
@@ -527,11 +527,6 @@ app.post('/api/auth/logout', function(req, res, next) {
 // Payment Settings endpoints
 app.get('/api/admin/payment-settings', async function(req, res) {
     try {
-        // Check if user is admin
-        if (!req.isAuthenticated() || !req.user.isAdmin) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
-
         // Check if we have stored settings (from admin panel updates)
         if (global.paymentSettings) {
             return res.json({ settings: global.paymentSettings });
@@ -563,11 +558,6 @@ app.get('/api/admin/payment-settings', async function(req, res) {
 
 app.post('/api/admin/payment-settings', upload.single('qrCodeImage'), async function(req, res) {
     try {
-        // Check if user is admin
-        if (!req.isAuthenticated() || !req.user.isAdmin) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
-
         const { bankName, accountTitle, accountNumber, iban, branchCode, swiftCode, paymentAmounts } = req.body;
         
         // Validate required fields
@@ -965,6 +955,37 @@ app.get('/api/admin/public/users', async function(req, res) {
   }
 });
 
+// Add public payment request status update endpoint (no authentication required)
+app.put('/api/admin/public/payment-request/:id/status', async function(req, res) {
+  try {
+    const { status, verificationNotes } = req.body;
+    
+    if (!['verified', 'rejected', 'completed'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const paymentRequest = await PaymentRequest.findById(req.params.id);
+    if (!paymentRequest) {
+      return res.status(404).json({ error: 'Payment request not found' });
+    }
+
+    paymentRequest.status = status;
+    paymentRequest.verificationNotes = verificationNotes || '';
+    paymentRequest.verifiedAt = new Date();
+
+    await paymentRequest.save();
+
+    res.json({ 
+      success: true, 
+      message: `Payment request ${status} successfully`,
+      paymentRequest 
+    });
+  } catch (error) {
+    console.error('Error updating payment request status:', error);
+    res.status(500).json({ error: 'Failed to update payment request status' });
+  }
+});
+
 
 app.get('/', (req, res) => {
     res.send('Hello World');
@@ -1028,11 +1049,6 @@ app.post('/reset-password', async (req, res) => {
 // Endpoint to automatically approve entity when payment is verified
 app.post('/api/admin/approve-entity', async function(req, res) {
     try {
-        // Check if user is admin
-        if (!req.isAuthenticated() || !req.user.isAdmin) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
-
         const { userId, entityType, paymentRequestId } = req.body;
         
         if (!userId || !entityType || !paymentRequestId) {
