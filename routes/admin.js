@@ -1,16 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { ensureAuthenticated, ensureAdmin } = require('../middleware/auth');
+const { ensureAuthenticated } = require('../middleware/auth');
 const Institute = require('../models/Institute');
 const Hospital = require('../models/Hospital');
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
 const PaymentRequest = require('../models/PaymentRequest');
 const User = require('../models/User');
-const bcrypt = require('bcrypt');
+// const bcrypt = require('bcrypt'); // No longer needed
 
-// Get all pending entities for approval (Admin only)
-router.get('/pending-entities', ensureAdmin, async (req, res) => {
+// Get all pending entities for approval (no authentication required for admin panel)
+router.get('/pending-entities', async (req, res) => {
   try {
     const [pendingInstitutes, pendingHospitals, pendingShops, pendingProducts] = await Promise.all([
       Institute.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName'),
@@ -59,8 +59,8 @@ router.get('/public/pending-entities', async (req, res) => {
   }
 });
 
-// Approve/Reject Institute
-router.put('/institute/:id/approval', ensureAdmin, async (req, res) => {
+// Approve/Reject Institute (no authentication required for admin panel)
+router.put('/institute/:id/approval', async (req, res) => {
   try {
     const { status, notes } = req.body;
     
@@ -75,7 +75,7 @@ router.put('/institute/:id/approval', ensureAdmin, async (req, res) => {
 
     institute.approvalStatus = status;
     institute.approvalNotes = notes || '';
-    institute.approvedBy = req.user._id;
+    institute.approvedBy = null; // No authentication required
     institute.approvedAt = new Date();
     
     // If approved, also set verified to true
@@ -96,8 +96,8 @@ router.put('/institute/:id/approval', ensureAdmin, async (req, res) => {
   }
 });
 
-// Approve/Reject Shop
-router.put('/shop/:id/approval', ensureAdmin, async (req, res) => {
+// Approve/Reject Shop (no authentication required for admin panel)
+router.put('/shop/:id/approval', async (req, res) => {
   try {
     const { status, notes } = req.body;
     
@@ -112,7 +112,7 @@ router.put('/shop/:id/approval', ensureAdmin, async (req, res) => {
 
     shop.approvalStatus = status;
     shop.approvalNotes = notes || '';
-    shop.approvedBy = req.user._id;
+    shop.approvedBy = null; // No authentication required
     shop.approvedAt = new Date();
 
     await shop.save();
@@ -128,8 +128,8 @@ router.put('/shop/:id/approval', ensureAdmin, async (req, res) => {
   }
 });
 
-// Approve/Reject Hospital
-router.put('/hospital/:id/approval', ensureAdmin, async (req, res) => {
+// Approve/Reject Hospital (no authentication required for admin panel)
+router.put('/hospital/:id/approval', async (req, res) => {
   try {
     const { status, notes } = req.body;
     
@@ -144,7 +144,7 @@ router.put('/hospital/:id/approval', ensureAdmin, async (req, res) => {
 
     hospital.approvalStatus = status;
     hospital.approvalNotes = notes || '';
-    hospital.approvedBy = req.user._id;
+    hospital.approvedBy = null; // No authentication required
     hospital.approvedAt = new Date();
     
     // If approved, also set verified to true
@@ -165,8 +165,8 @@ router.put('/hospital/:id/approval', ensureAdmin, async (req, res) => {
   }
 });
 
-// Approve/Reject Product
-router.put('/product/:id/approval', ensureAdmin, async (req, res) => {
+// Approve/Reject Product (no authentication required for admin panel)
+router.put('/product/:id/approval', async (req, res) => {
   try {
     const { status, notes } = req.body;
     
@@ -181,7 +181,7 @@ router.put('/product/:id/approval', ensureAdmin, async (req, res) => {
 
     product.approvalStatus = status;
     product.approvalNotes = notes || '';
-    product.approvedBy = req.user._id;
+    product.approvedBy = null; // No authentication required
     product.approvedAt = new Date();
 
     await product.save();
@@ -197,8 +197,8 @@ router.put('/product/:id/approval', ensureAdmin, async (req, res) => {
   }
 });
 
-// Get all payment requests for admin review
-router.get('/payment-requests', ensureAdmin, async (req, res) => {
+// Get all payment requests for admin review (no authentication required for admin panel)
+router.get('/payment-requests', async (req, res) => {
   try {
     const { status, entityType, page = 1, limit = 20 } = req.query;
     
@@ -226,8 +226,8 @@ router.get('/payment-requests', ensureAdmin, async (req, res) => {
   }
 });
 
-// Update payment request status
-router.put('/payment-request/:id/status', ensureAdmin, async (req, res) => {
+// Update payment request status (no authentication required for admin panel)
+router.put('/payment-request/:id/status', async (req, res) => {
   try {
     const { status, verificationNotes } = req.body;
     
@@ -242,7 +242,7 @@ router.put('/payment-request/:id/status', ensureAdmin, async (req, res) => {
 
     paymentRequest.status = status;
     paymentRequest.verificationNotes = verificationNotes || '';
-    paymentRequest.verifiedBy = req.user._id;
+    paymentRequest.verifiedBy = null; // No authentication required
     paymentRequest.verifiedAt = new Date();
 
     await paymentRequest.save();
@@ -254,12 +254,21 @@ router.put('/payment-request/:id/status', ensureAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating payment request status:', error);
-    res.status(500).json({ error: 'Failed to update payment request status' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      paymentRequestId: req.params.id,
+      status: req.body.status
+    });
+    res.status(500).json({ 
+      error: 'Failed to update payment request status',
+      details: error.message 
+    });
   }
 });
 
-// Get admin dashboard statistics
-router.get('/stats', ensureAdmin, async (req, res) => {
+// Get admin dashboard statistics (no authentication required for admin panel)
+router.get('/stats', async (req, res) => {
   try {
     const [
       totalInstitutes,
@@ -298,89 +307,10 @@ router.get('/stats', ensureAdmin, async (req, res) => {
   }
 });
 
-// Update admin profile
-router.put('/profile', ensureAdmin, async (req, res) => {
-  try {
-    const { username, email } = req.body;
-    
-    // Validate input
-    if (!username || !email) {
-      return res.status(400).json({ error: 'Username and email are required' });
-    }
+// Update admin profile (disabled - no authentication system)
+// router.put('/profile', async (req, res) => { ... });
 
-    // Check if username or email already exists (excluding current user)
-    const existingUser = await User.findOne({
-      $or: [
-        { username: username, _id: { $ne: req.user._id } },
-        { email: email, _id: { $ne: req.user._id } }
-      ]
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ 
-        error: 'Username or email already exists' 
-      });
-    }
-
-    // Update user profile
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user._id,
-      { username, email },
-      { new: true, runValidators: true }
-    );
-
-    res.json({ 
-      success: true, 
-      message: 'Profile updated successfully',
-      user: updatedUser
-    });
-  } catch (error) {
-    console.error('Error updating admin profile:', error);
-    res.status(500).json({ error: 'Failed to update profile' });
-  }
-});
-
-// Change admin password
-router.put('/change-password', ensureAdmin, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-    
-    // Validate input
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: 'Current password and new password are required' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
-    }
-
-    // Get current user with password
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Verify current password
-    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
-    if (!isPasswordValid) {
-      return res.status(400).json({ error: 'Current password is incorrect' });
-    }
-
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // Update password
-    user.password = hashedPassword;
-    await user.save();
-
-    res.json({ 
-      success: true, 
-      message: 'Password changed successfully'
-    });
-  } catch (error) {
-    console.error('Error changing admin password:', error);
-    res.status(500).json({ error: 'Failed to change password' });
-  }
-});
+// Change admin password (disabled - no authentication system)
+// router.put('/change-password', async (req, res) => { ... });
 
 module.exports = router;
