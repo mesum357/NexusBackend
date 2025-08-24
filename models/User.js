@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const passportLocalMongoose = require('passport-local-mongoose');
 const findOrCreate = require('mongoose-findorcreate');
 
-const UsersSchema = new mongoose.Schema({
+const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   fullName: { type: String },
   email: { type: String, unique: true },
@@ -16,14 +16,14 @@ const UsersSchema = new mongoose.Schema({
   verificationToken: { type: String },
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
-  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Users' }],
-  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Users' }],
+  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isAdmin: { type: Boolean, default: false } // Admin role for entity approval
 }, { timestamps: true });
 
 // Add plugins
-UsersSchema.plugin(passportLocalMongoose);
-UsersSchema.plugin(findOrCreate);
+userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(findOrCreate);
 
-module.exports = mongoose.models.Users || mongoose.model('Users', UsersSchema, 'Users');
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);
  

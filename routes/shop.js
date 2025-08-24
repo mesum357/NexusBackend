@@ -44,13 +44,19 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
       whatsapp
     } = req.body;
 
+    // Set default images if none provided
+    const shopLogo = req.file ? req.file.path : 'https://picsum.photos/200/200?random=1';
+    const ownerDp = req.user.profileImage || 'https://picsum.photos/100/100?random=3';
+    const shopBanner = 'https://picsum.photos/800/400?random=2';
+
     const shop = new Shop({
       shopName,
       city,
       categories: Array.isArray(businessCategories) ? businessCategories : [businessCategories],
       shopType: businessType,
       shopDescription: description,
-      shopLogo: req.file ? req.file.path : null, // Cloudinary URL
+      shopLogo: shopLogo, // Cloudinary URL or default
+      shopBanner: shopBanner, // Default banner
       facebookUrl: facebook || '',
       instagramHandle: instagram || '',
       whatsappNumber: whatsapp || '',
@@ -65,7 +71,7 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
       },
       owner: req.user._id,
       ownerName: req.user.username || req.user.email || '',
-      ownerDp: req.user.profileImage || '',
+      ownerDp: ownerDp, // User profile or default
       // Use user-provided Agent ID or generate one if not provided
       agentId: req.body.agentId || generateShopAgentId(shopName)
     });
@@ -136,6 +142,36 @@ router.get('/:shopId', async (req, res) => {
     
     if (!isOwner && !isAdmin && shop.approvalStatus !== 'approved') {
       return res.status(404).json({ error: 'Shop not found' });
+    }
+    
+    // Process products to ensure image field is properly populated
+    if (shop.products && shop.products.length > 0) {
+      shop.products = shop.products.map(product => {
+        // Create a new product object to avoid modifying the original
+        const processedProduct = { ...product };
+        
+        // If product has no image field or empty image, check for alternatives
+        if (!processedProduct.image || processedProduct.image === '') {
+          // Check if there's an imagePreviews array (from new data)
+          if (processedProduct.imagePreviews && Array.isArray(processedProduct.imagePreviews) && processedProduct.imagePreviews.length > 0) {
+            processedProduct.image = processedProduct.imagePreviews[0];
+          }
+          // Check if there's an imagePreview field (from old data)
+          else if (processedProduct.imagePreview && processedProduct.imagePreview !== '') {
+            processedProduct.image = processedProduct.imagePreview;
+          } else {
+            // Use placeholder if no image is available
+            processedProduct.image = 'https://picsum.photos/150/150?random=4';
+          }
+        }
+        
+        // Ensure the image field is not undefined or null
+        if (!processedProduct.image) {
+          processedProduct.image = 'https://picsum.photos/150/150?random=4';
+        }
+        
+        return processedProduct;
+      });
     }
     
     res.json({ shop });
@@ -348,27 +384,59 @@ router.post('/:id/add-product', ensureAuthenticated, upload.single('productImage
   try {
     const shopId = req.params.id;
     const { name, description, price, discountPercentage, category } = req.body;
+    
+    console.log('📦 Adding product to shop:', shopId);
+    console.log('📦 Product data:', { name, description, price, discountPercentage, category });
+    console.log('📦 Uploaded file:', req.file);
+    
     if (!name || !price || !category) {
       return res.status(400).json({ error: 'Name, price, and category are required' });
     }
+    
     const shop = await Shop.findById(shopId);
     if (!shop) {
       return res.status(404).json({ error: 'Shop not found' });
     }
+    
     if (!req.user || String(shop.owner) !== String(req.user._id)) {
       return res.status(403).json({ error: 'You are not authorized to add products to this shop' });
     }
+    
+    // Generate a unique ID for the product (matching wizard flow)
+    const productId = Date.now().toString();
+    
+    // Process the image - use Cloudinary URL if uploaded, otherwise placeholder
+    let productImage = 'https://picsum.photos/150/150?random=4'; // Default placeholder
+    
+    if (req.file && req.file.path) {
+      productImage = req.file.path; // Cloudinary URL
+      console.log('📦 Using uploaded image:', productImage);
+    } else {
+      console.log('📦 No image uploaded, using placeholder:', productImage);
+    }
+    
     const product = {
+      id: productId, // Add ID field to match wizard schema
       name,
-      description,
+      description: description || '',
       price: Number(price),
       discountPercentage: Number(discountPercentage) || 0,
       category,
-      image: req.file ? req.file.path : '' // Cloudinary URL
+      image: productImage // Always set a valid image URL
     };
+    
+    console.log('📦 Final product object:', product);
+    
     shop.products.push(product);
     await shop.save();
-    res.status(201).json({ message: 'Product added successfully', shop });
+    
+    console.log('📦 Product added successfully. Total products in shop:', shop.products.length);
+    
+    res.status(201).json({ 
+      message: 'Product added successfully', 
+      product: product,
+      shop: shop 
+    });
   } catch (error) {
     console.error('Error adding product:', error);
     res.status(500).json({ error: error.message });
@@ -380,26 +448,55 @@ router.put('/:shopId/update-product/:productIndex', ensureAuthenticated, upload.
   try {
     const { shopId, productIndex } = req.params;
     const { name, description, price, discountPercentage, category } = req.body;
+    
+    console.log('📦 Updating product in shop:', shopId, 'at index:', productIndex);
+    console.log('📦 Update data:', { name, description, price, discountPercentage, category });
+    console.log('📦 Uploaded file:', req.file);
+    
     const shop = await Shop.findById(shopId);
     if (!shop) {
       return res.status(404).json({ error: 'Shop not found' });
     }
+    
     if (!req.user || String(shop.owner) !== String(req.user._id)) {
       return res.status(403).json({ error: 'You are not authorized to update products in this shop' });
     }
+    
     const idx = parseInt(productIndex, 10);
     if (isNaN(idx) || idx < 0 || idx >= shop.products.length) {
       return res.status(400).json({ error: 'Invalid product index' });
     }
+    
     // Update product fields
     if (name) shop.products[idx].name = name;
-    if (description) shop.products[idx].description = description;
+    if (description !== undefined) shop.products[idx].description = description || '';
     if (price) shop.products[idx].price = Number(price);
     if (discountPercentage !== undefined) shop.products[idx].discountPercentage = Number(discountPercentage) || 0;
     if (category) shop.products[idx].category = category;
-    if (req.file) shop.products[idx].image = req.file.path; // Cloudinary URL
+    
+    // Handle image update - only update if new image is uploaded
+    if (req.file && req.file.path) {
+      shop.products[idx].image = req.file.path; // Cloudinary URL
+      console.log('📦 Updated product image to:', req.file.path);
+    } else {
+      console.log('📦 No new image uploaded, keeping existing image:', shop.products[idx].image);
+    }
+    
+    // Ensure product has an ID (for backward compatibility)
+    if (!shop.products[idx].id) {
+      shop.products[idx].id = Date.now().toString();
+      console.log('📦 Added missing ID to product:', shop.products[idx].id);
+    }
+    
     await shop.save();
-    res.json({ message: 'Product updated successfully', shop });
+    
+    console.log('📦 Product updated successfully:', shop.products[idx]);
+    
+    res.json({ 
+      message: 'Product updated successfully', 
+      product: shop.products[idx],
+      shop: shop 
+    });
   } catch (error) {
     console.error('Error updating product:', error);
     res.status(500).json({ error: error.message });

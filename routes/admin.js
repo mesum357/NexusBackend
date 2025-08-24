@@ -6,7 +6,7 @@ const Hospital = require('../models/Hospital');
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
 const PaymentRequest = require('../models/PaymentRequest');
-const Users = require('../models/User');
+const User = require('../models/User');
 const bcrypt = require('bcrypt');
 
 // Get all pending entities for approval (Admin only)
@@ -309,7 +309,7 @@ router.put('/profile', ensureAdmin, async (req, res) => {
     }
 
     // Check if username or email already exists (excluding current user)
-    const existingUser = await Users.findOne({
+    const existingUser = await User.findOne({
       $or: [
         { username: username, _id: { $ne: req.user._id } },
         { email: email, _id: { $ne: req.user._id } }
@@ -323,7 +323,7 @@ router.put('/profile', ensureAdmin, async (req, res) => {
     }
 
     // Update user profile
-    const updatedUser = await Users.findByIdAndUpdate(
+    const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
       { username, email },
       { new: true, runValidators: true }
@@ -355,7 +355,7 @@ router.put('/change-password', ensureAdmin, async (req, res) => {
     }
 
     // Get current user with password
-    const user = await Users.findById(req.user._id);
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }

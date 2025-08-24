@@ -2,7 +2,13 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 5000;
 require('dotenv').config();
-console.log('Loaded MONGODB_URI:', process.env.MONGODB_URI);
+console.log('🚀 Server starting with environment:', process.env.NODE_ENV || 'development');
+console.log('🌐 FRONTEND_URL:', process.env.FRONTEND_URL || 'not set');
+console.log('🔗 Loaded MONGODB_URI:', process.env.MONGODB_URI ? 'set' : 'not set');
+console.log('📍 PORT:', PORT);
+console.log('🚂 Railway Environment:', process.env.RAILWAY_ENVIRONMENT || 'not set');
+console.log('🚂 Railway Static URL:', process.env.RAILWAY_STATIC_URL || 'not set');
+console.log('🚂 Railway Service Name:', process.env.RAILWAY_SERVICE_NAME || 'not set');
 const http = require('http');
 const path = require('path');
 const socketIo = require('socket.io');
@@ -21,7 +27,10 @@ const cors = require('cors');
 const shopRoutes = require('./routes/shop');
 const shopWizardRoutes = require('./routes/shop-wizard');
 const instituteRoutes = require('./routes/institute');
+const instituteWizardRoutes = require('./routes/institute-wizard');
 const hospitalRoutes = require('./routes/hospital');
+const hospitalWizardRoutes = require('./routes/hospital-wizard');
+const productWizardRoutes = require('./routes/product-wizard');
 const feedRoutes = require('./routes/feed');
 const friendsRoutes = require('./routes/friends');
 const followRoutes = require('./routes/follow');
@@ -59,11 +68,96 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? [process.env.FRONTEND_URL, /\.railway\.app$/, 'https://pakistanonlines.com', 'http://pakistanonlines.com']
-    : ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:8083', 'http://localhost:8082', 'http://localhost:3001', 'https://pakistanonlines.com', 'http://pakistanonlines.com'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3001', // Admin panel
+      'http://localhost:5173', // Frontend dev
+      'http://localhost:8080', // Frontend dev
+      'http://localhost:8083', // Frontend dev
+      'http://localhost:8082', // Frontend dev
+      'https://pakistanonlines.com',
+      'http://pakistanonlines.com'
+    ];
+    
+    // Add environment-specific origins
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+    
+    // Check if origin is allowed
+    if (allowedOrigins.includes(origin) || 
+        origin.endsWith('.railway.app') || 
+        origin.endsWith('.up.railway.app')) {
+      return callback(null, true);
+    }
+    
+    console.log('🚫 CORS blocked origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
+  exposedHeaders: ['Content-Length', 'X-Requested-With'],
 }));
+
+// Handle preflight requests
+app.options('*', cors());
+
+// Add CORS headers to all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  console.log('🌐 Request origin:', origin);
+  
+  // Allow specific origins
+  const allowedOrigins = [
+    'http://localhost:3001',
+    'http://localhost:5173',
+    'http://localhost:8080',
+    'http://localhost:8083',
+    'http://localhost:8082',
+    'https://pakistanonlines.com',
+    'http://pakistanonlines.com'
+  ];
+  
+  // Add environment-specific origins
+  if (process.env.FRONTEND_URL) {
+    allowedOrigins.push(process.env.FRONTEND_URL);
+  }
+  
+  // For Railway deployment, be more permissive with localhost origins
+  const isRailway = process.env.RAILWAY_STATIC_URL || process.env.RAILWAY_ENVIRONMENT;
+  const isLocalhost = origin && origin.startsWith('http://localhost:');
+  
+  // Check if origin is allowed
+  if (origin && (allowedOrigins.includes(origin) || 
+      origin.endsWith('.railway.app') || 
+      origin.endsWith('.up.railway.app') ||
+      (isRailway && isLocalhost))) {
+    res.header('Access-Control-Allow-Origin', origin);
+    console.log('✅ CORS allowed for origin:', origin);
+  } else {
+    console.log('🚫 CORS blocked for origin:', origin);
+    // For Railway, allow localhost origins even if not in allowed list
+    if (isRailway && isLocalhost) {
+      res.header('Access-Control-Allow-Origin', origin);
+      console.log('✅ CORS allowed for localhost on Railway:', origin);
+    }
+  }
+  
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 // Session configuration
 const isProduction = process.env.NODE_ENV === 'production';
@@ -118,7 +212,7 @@ mongoose.connect(mongoURI, mongooseOptions)
         process.exit(1);
     });
 
-const Users = require('./models/User');
+const User = require('./models/User');
 const Institute = require('./models/Institute');
 const Shop = require('./models/Shop');
 const Product = require('./models/Product');
@@ -133,10 +227,10 @@ passport.use(new LocalStrategy({
         console.log('🔐 Passport authentication attempt for:', username);
         
         // Try to find user by username first, then by email
-        let user = await Users.findOne({ username: username });
+        let user = await User.findOne({ username: username });
         if (!user) {
             // If not found by username, try by email
-            user = await Users.findOne({ email: username });
+            user = await User.findOne({ email: username });
             console.log('🔍 User not found by username, trying email:', username);
         }
         
@@ -167,7 +261,7 @@ passport.serializeUser(function(user, done) {
 
 passport.deserializeUser(async function(id, done) {
     try {
-        const user = await Users.findById(id);
+        const user = await User.findById(id);
         done(null, user);
     } catch (err) {
         done(err, null);
@@ -185,10 +279,10 @@ passport.use(new GoogleStrategy({
 },
 async function(req, accessToken, refreshToken, profile, done) {
     try {
-        let user = await Users.findOne({ googleId: profile.id });
+        let user = await User.findOne({ googleId: profile.id });
         
         if (!user) {
-            user = await Users.create({
+            user = await User.create({
                 googleId: profile.id,
                 username: profile.emails[0].value,
                 email: profile.emails[0].value
@@ -275,7 +369,7 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
         userData.profileImage = req.file.path; // Cloudinary URL
     }
     
-    Users.register(userData, password, async function(err, user) {
+    User.register(userData, password, async function(err, user) {
         if (err) {
             console.error('Registration error:', err); // Log registration errors
             let errorMessage = 'Registration failed';
@@ -303,7 +397,7 @@ app.get('/verify-email', async (req, res) => {
     if (!token) {
         return res.redirect('/login?error=Invalid or missing verification token.');
     }
-    const user = await Users.findOne({ verificationToken: token });
+    const user = await User.findOne({ verificationToken: token });
     if (!user) {
         return res.redirect('/login?error=Invalid or expired verification token.');
     }
@@ -430,7 +524,7 @@ app.post('/api/auth/register', upload.single('profileImage'), async function(req
         console.log('📸 Profile image added:', req.file.path);
     }
     
-    Users.register(userData, password, async function(err, user) {
+    User.register(userData, password, async function(err, user) {
         if (err) {
             console.error('❌ Admin Registration error:', err);
             let errorMessage = 'Registration failed';
@@ -644,6 +738,9 @@ app.get('/api/payment/settings', async function(req, res) {
 
 // Add public admin stats endpoint (no authentication required)
 app.get('/api/admin/public/stats', async function(req, res) {
+  console.log('📊 Admin stats request from origin:', req.headers.origin);
+  console.log('🔍 Request headers:', req.headers);
+  
   try {
     const [
       totalInstitutes,
@@ -665,6 +762,8 @@ app.get('/api/admin/public/stats', async function(req, res) {
       PaymentRequest.countDocuments({ status: 'pending' })
     ]);
 
+    console.log('✅ Stats calculated successfully');
+    
     res.json({
       entities: {
         institutes: { total: totalInstitutes, pending: pendingInstitutes },
@@ -677,7 +776,7 @@ app.get('/api/admin/public/stats', async function(req, res) {
       }
     });
   } catch (error) {
-    console.error('Error fetching public admin stats:', error);
+    console.error('❌ Error fetching public admin stats:', error);
     res.status(500).json({ error: 'Failed to fetch admin statistics' });
   }
 });
@@ -691,21 +790,54 @@ app.get('/api/admin/public/pending-entities', async function(req, res) {
       Product.find({ approvalStatus: 'pending' }).populate('owner', 'username email fullName')
     ]);
 
-    // Add entityType field to each entity
-    const institutesWithType = pendingInstitutes.map(inst => ({
-      ...inst.toObject(),
-      entityType: 'institute'
-    }));
+    // Add entityType field to each entity and ensure owner data is valid
+    const institutesWithType = pendingInstitutes.map(inst => {
+      const entityData = inst.toObject();
+      // Ensure owner data exists, provide fallback if missing
+      if (!entityData.owner) {
+        entityData.owner = {
+          username: 'Unknown Owner',
+          email: 'N/A',
+          fullName: 'Unknown Owner'
+        };
+      }
+      return {
+        ...entityData,
+        entityType: 'institute'
+      };
+    });
     
-    const shopsWithType = pendingShops.map(shop => ({
-      ...shop.toObject(),
-      entityType: 'shop'
-    }));
+    const shopsWithType = pendingShops.map(shop => {
+      const entityData = shop.toObject();
+      // Ensure owner data exists, provide fallback if missing
+      if (!entityData.owner) {
+        entityData.owner = {
+          username: 'Unknown Owner',
+          email: 'N/A',
+          fullName: 'Unknown Owner'
+        };
+      }
+      return {
+        ...entityData,
+        entityType: 'shop'
+      };
+    });
     
-    const productsWithType = pendingProducts.map(product => ({
-      ...product.toObject(),
-      entityType: 'product'
-    }));
+    const productsWithType = pendingProducts.map(product => {
+      const entityData = product.toObject();
+      // Ensure owner data exists, provide fallback if missing
+      if (!entityData.owner) {
+        entityData.owner = {
+          username: 'Unknown Owner',
+          email: 'N/A',
+          fullName: 'Unknown Owner'
+        };
+      }
+      return {
+        ...entityData,
+        entityType: 'product'
+      };
+    });
 
     res.json({
       institutes: institutesWithType,
@@ -838,9 +970,20 @@ app.get('/api/admin/public/payment-requests', async function(req, res) {
       PaymentRequest.countDocuments(query)
     ]);
     
+    // Ensure all payment requests have valid user data
+    const validPaymentRequests = paymentRequests.filter(payment => {
+      if (!payment.user) {
+        console.log(`⚠️ Payment ${payment._id} has no user data, skipping`);
+        return false;
+      }
+      return true;
+    });
+    
+    console.log(`📊 Found ${paymentRequests.length} payment requests, ${validPaymentRequests.length} have valid user data`);
+    
     // Populate Agent IDs from associated entities for payment requests that don't have them
     const enhancedPaymentRequests = await Promise.all(
-      paymentRequests.map(async (payment) => {
+      validPaymentRequests.map(async (payment) => {
         console.log(`\n🔍 Processing payment ${payment._id}:`);
         console.log(`   Current agentId: ${payment.agentId}`);
         console.log(`   Entity Type: ${payment.entityType}`);
@@ -899,7 +1042,7 @@ app.get('/api/admin/public/payment-requests', async function(req, res) {
       paymentRequests: enhancedPaymentRequests,
       totalPages,
       currentPage: page,
-      total
+      total: enhancedPaymentRequests.length // Use filtered count for pagination
     });
   } catch (error) {
     console.error('Error fetching payment requests:', error);
@@ -932,14 +1075,14 @@ app.get('/api/admin/public/users', async function(req, res) {
     if (verified === 'true') query.verified = true;
     if (verified === 'false') query.verified = false;
     
-    const [users, total] = await Promise.all([
-      Users.find(query)
-        .select('-password')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      Users.countDocuments(query)
-    ]);
+         const [users, total] = await Promise.all([
+       User.find(query)
+         .select('-password')
+         .sort({ createdAt: -1 })
+         .skip(skip)
+         .limit(limit),
+       User.countDocuments(query)
+     ]);
     
     const totalPages = Math.ceil(total / limit);
     
@@ -991,13 +1134,43 @@ app.get('/', (req, res) => {
     res.send('Hello World');
 });
 
+// Image upload endpoint for wizard
+app.post('/api/upload/image', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+
+    
+    res.json({
+      success: true,
+      imageUrl: req.file.path, // Cloudinary URL
+      message: 'Image uploaded successfully'
+    });
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
+// Test CORS endpoint
+app.get('/api/test-cors', (req, res) => {
+  console.log('🔍 CORS test request from origin:', req.headers.origin);
+  res.json({ 
+    message: 'CORS test successful', 
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Forgot Password: Send reset link
 app.post('/forgot-password', async (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }
-  const user = await Users.findOne({ email });
+  const user = await User.findOne({ email });
   if (!user) {
     // For security, always respond with success
     return res.status(200).json({ message: 'If your email is registered, you’ll receive a reset link shortly.' });
@@ -1031,7 +1204,7 @@ app.post('/reset-password', async (req, res) => {
   if (password.length < 6) {
     return res.status(400).json({ error: 'Password must be at least 6 characters long' });
   }
-  const user = await Users.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: Date.now() } });
+  const user = await User.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: Date.now() } });
   if (!user) {
     return res.status(400).json({ error: 'Invalid or expired reset token' });
   }
@@ -1071,44 +1244,121 @@ app.post('/api/admin/approve-entity', async function(req, res) {
                 entityCollection = 'institutes';
                 break;
             case 'hospital':
-                // For now, use Institute model for hospitals since they share the same schema
-                EntityModel = require('./models/Institute');
-                entityCollection = 'institutes';
+                EntityModel = require('./models/Hospital');
+                entityCollection = 'hospitals';
                 break;
             case 'marketplace':
-                // For now, use Shop model for marketplace since they share similar structure
-                EntityModel = require('./models/Shop');
-                entityCollection = 'shops';
+                EntityModel = require('./models/Product');
+                entityCollection = 'products';
                 break;
             default:
                 return res.status(400).json({ error: 'Invalid entity type' });
         }
 
-        // Find the pending entity for this user
-        let pendingEntity;
+        // First, try to find the entity by entityId from the payment request if available
+        let pendingEntity = null;
         
-        if (entityType === 'shop') {
-            pendingEntity = await EntityModel.findOne({ 
-                owner: userId, 
-                approvalStatus: 'pending' 
-            });
-        } else if (entityType === 'institute') {
-            pendingEntity = await EntityModel.findOne({ 
-                owner: userId, 
-                approvalStatus: 'pending' 
-            });
-        } else {
-            // For other entity types, try to find by userId or owner field
-            pendingEntity = await EntityModel.findOne({ 
-                $or: [
-                    { userId: userId, approvalStatus: 'pending' },
-                    { owner: userId, approvalStatus: 'pending' }
-                ]
-            });
+        // Get the payment request to check if it has an entityId
+        const PaymentRequest = require('./models/PaymentRequest');
+        const paymentRequest = await PaymentRequest.findById(paymentRequestId);
+        
+        if (paymentRequest && paymentRequest.entityId) {
+            console.log(`🔍 Payment request has entityId: ${paymentRequest.entityId}, searching directly...`);
+            pendingEntity = await EntityModel.findById(paymentRequest.entityId);
+            
+            if (pendingEntity) {
+                console.log(`✅ Found entity directly by ID: ${pendingEntity._id}`);
+                // Verify it's the correct entity type and owner
+                if (pendingEntity.approvalStatus !== 'pending') {
+                    console.log(`⚠️ Entity ${pendingEntity._id} is not pending (status: ${pendingEntity.approvalStatus})`);
+                    pendingEntity = null;
+                } else if (pendingEntity.owner.toString() !== userId) {
+                    console.log(`⚠️ Entity ${pendingEntity._id} owner mismatch: ${pendingEntity.owner} vs ${userId}`);
+                    pendingEntity = null;
+                }
+            }
+        }
+        
+        // If not found by entityId, fall back to searching by owner and status
+        if (!pendingEntity) {
+            console.log(`🔍 Searching for pending ${entityType} for user ${userId}...`);
+            
+            if (entityType === 'shop') {
+                pendingEntity = await EntityModel.findOne({ 
+                    owner: userId, 
+                    approvalStatus: 'pending' 
+                });
+                console.log(`   - Shop search query: { owner: ${userId}, approvalStatus: 'pending' }`);
+            } else if (entityType === 'institute') {
+                pendingEntity = await EntityModel.findOne({ 
+                    owner: userId, 
+                    approvalStatus: 'pending' 
+                });
+                console.log(`   - Institute search query: { owner: ${userId}, approvalStatus: 'pending' }`);
+            } else if (entityType === 'hospital') {
+                pendingEntity = await EntityModel.findOne({ 
+                    owner: userId, 
+                    approvalStatus: 'pending' 
+                });
+                console.log(`   - Hospital search query: { owner: ${userId}, approvalStatus: 'pending' }`);
+            } else if (entityType === 'marketplace') {
+                pendingEntity = await EntityModel.findOne({ 
+                    owner: userId, 
+                    approvalStatus: 'pending' 
+                });
+                console.log(`   - Product search query: { owner: ${userId}, approvalStatus: 'pending' }`);
+            } else {
+                // For other entity types, try to find by userId or owner field
+                pendingEntity = await EntityModel.findOne({ 
+                    $or: [
+                        { userId: userId, approvalStatus: 'pending' },
+                        { owner: userId, approvalStatus: 'pending' }
+                    ]
+                });
+                console.log(`   - Other entity search query: { $or: [{ userId: ${userId}, approvalStatus: 'pending' }, { owner: ${userId}, approvalStatus: 'pending' }] }`);
+            }
+        }
+        
+        console.log(`   - Search result: ${pendingEntity ? 'Found' : 'Not found'}`);
+        if (pendingEntity) {
+            console.log(`   - Entity ID: ${pendingEntity._id}`);
+            console.log(`   - Current approvalStatus: ${pendingEntity.approvalStatus}`);
         }
 
         if (!pendingEntity) {
-            console.log(`No pending ${entityType} found for user ${userId}`);
+            console.log(`❌ No pending ${entityType} found for user ${userId}`);
+            console.log(`   - This might happen if:`);
+            console.log(`     1. The ${entityType} was already approved`);
+            console.log(`     2. The ${entityType} was created with a different owner ID`);
+            console.log(`     3. The ${entityType} creation failed`);
+            
+            // Let's also check if there are any entities for this user at all
+            if (entityType === 'shop') {
+                const allShops = await EntityModel.find({ owner: userId });
+                console.log(`   - Total shops found for user: ${allShops.length}`);
+                allShops.forEach(shop => {
+                    console.log(`     - Shop: ${shop.shopName}, Status: ${shop.approvalStatus}, ID: ${shop._id}`);
+                });
+            } else if (entityType === 'institute') {
+                const allInstitutes = await EntityModel.find({ owner: userId });
+                console.log(`   - Total institutes found for user: ${allInstitutes.length}`);
+                allInstitutes.forEach(institute => {
+                    console.log(`     - Institute: ${institute.name}, Status: ${institute.approvalStatus}, ID: ${institute._id}`);
+                });
+            } else if (entityType === 'hospital') {
+                const allHospitals = await EntityModel.find({ owner: userId });
+                console.log(`   - Total hospitals found for user: ${allHospitals.length}`);
+                allHospitals.forEach(hospital => {
+                    console.log(`     - Hospital: ${hospital.name}, Status: ${hospital.approvalStatus}, ID: ${hospital._id}`);
+                });
+            } else if (entityType === 'marketplace') {
+                const allProducts = await EntityModel.find({ owner: userId });
+                console.log(`   - Total products found for user: ${allProducts.length}`);
+                allProducts.forEach(product => {
+                    console.log(`     - Product: ${product.title}, Status: ${product.approvalStatus}, ID: ${product._id}`);
+                });
+            }
+            
             return res.status(404).json({ error: `No pending ${entityType} found for this user` });
         }
 
@@ -1122,11 +1372,17 @@ app.post('/api/admin/approve-entity', async function(req, res) {
         await pendingEntity.save();
 
         console.log(`${entityType} ${pendingEntity._id} approved successfully for user ${userId}`);
+        console.log(`✅ ${entityType} will now appear on the appropriate page automatically`);
+        console.log(`   - approvalStatus: ${pendingEntity.approvalStatus}`);
+        console.log(`   - approvedAt: ${pendingEntity.approvedAt}`);
+        console.log(`   - paymentVerified: ${pendingEntity.paymentVerified}`);
 
         res.json({ 
             success: true, 
             message: `${entityType} approved successfully`,
-            entityId: pendingEntity._id
+            entityId: pendingEntity._id,
+            approvalStatus: pendingEntity.approvalStatus,
+            approvedAt: pendingEntity.approvedAt
         });
 
     } catch (error) {
@@ -1134,6 +1390,33 @@ app.post('/api/admin/approve-entity', async function(req, res) {
         res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+// Test endpoint to check shop approval status
+app.get('/api/test/shop-approval/:shopId', async function(req, res) {
+  try {
+    const Shop = require('./models/Shop');
+    const shop = await Shop.findById(req.params.shopId);
+    
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+    
+    res.json({
+      shopId: shop._id,
+      shopName: shop.shopName,
+      approvalStatus: shop.approvalStatus,
+      approvedAt: shop.approvedAt,
+      approvedBy: shop.approvedBy,
+      paymentVerified: shop.paymentVerified,
+      paymentRequestId: shop.paymentRequestId,
+      createdAt: shop.createdAt,
+      updatedAt: shop.updatedAt
+    });
+  } catch (error) {
+    console.error('Error checking shop approval:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // Public endpoint to initialize categories (no authentication required)
 app.post('/api/categories/initialize-public', async function(req, res) {
@@ -1321,7 +1604,10 @@ app.post('/api/categories/initialize-public', async function(req, res) {
   app.use('/api/shop', shopRoutes);
 app.use('/api/shop-wizard', shopWizardRoutes);
 app.use('/api/institute', instituteRoutes);
+app.use('/api/institute-wizard', instituteWizardRoutes);
 app.use('/api/hospital', hospitalRoutes);
+app.use('/api/hospital-wizard', hospitalWizardRoutes);
+app.use('/api/product-wizard', productWizardRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/follow', followRoutes);

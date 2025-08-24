@@ -147,6 +147,40 @@ router.get('/my', ensureAuthenticated, async (req, res) => {
   }
 });
 
+// Link payment request to shop
+router.put('/:transactionId/link-shop', ensureAuthenticated, async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const { shopId } = req.body;
+    
+    if (!shopId) {
+      return res.status(400).json({ error: 'Shop ID is required' });
+    }
+    
+    // Find the payment request by transaction ID
+    const paymentRequest = await PaymentRequest.findOne({ transactionId });
+    if (!paymentRequest) {
+      return res.status(404).json({ error: 'Payment request not found' });
+    }
+    
+    // Update the payment request with the shop ID
+    paymentRequest.entityId = shopId;
+    await paymentRequest.save();
+    
+    console.log(`✅ Payment request ${transactionId} linked to shop ${shopId}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Payment request linked to shop successfully',
+      paymentRequest 
+    });
+    
+  } catch (error) {
+    console.error('Error linking payment to shop:', error);
+    res.status(500).json({ error: 'Failed to link payment to shop' });
+  }
+});
+
 // Get payment request by ID
 router.get('/:id', ensureAuthenticated, async (req, res) => {
   try {

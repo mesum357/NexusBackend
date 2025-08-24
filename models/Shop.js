@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 // Product sub-schema
 const productSchema = new mongoose.Schema({
+  id: { type: String }, // Frontend-generated ID for tracking
   name: { type: String, required: true },
   image: { type: String },
   description: { type: String },

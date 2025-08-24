@@ -30,7 +30,14 @@ const paymentRequestSchema = new mongoose.Schema({
   // Payment details
   amount: { 
     type: Number, 
-    required: true 
+    required: true,
+    min: [0, 'Amount cannot be negative'],
+    validate: {
+      validator: function(v) {
+        return !isNaN(v) && v >= 0;
+      },
+      message: 'Amount must be a valid positive number'
+    }
   },
   
   // Bank transaction details
@@ -87,7 +94,14 @@ const paymentRequestSchema = new mongoose.Schema({
   
   totalAmount: { 
     type: Number, 
-    required: true 
+    required: true,
+    min: [0, 'Total amount cannot be negative'],
+    validate: {
+      validator: function(v) {
+        return !isNaN(v) && v >= 0;
+      },
+      message: 'Total amount must be a valid positive number'
+    }
   },
   
   // Screenshot file for payment verification
@@ -117,7 +131,24 @@ paymentRequestSchema.index({ transactionId: 1 }, { unique: true });
 
 // Pre-save middleware to calculate total amount
 paymentRequestSchema.pre('save', function(next) {
+  // Ensure amount is a valid number
+  if (typeof this.amount !== 'number' || isNaN(this.amount)) {
+    this.amount = 0;
+  }
+  
+  // Ensure processingFee is a valid number
+  if (typeof this.processingFee !== 'number' || isNaN(this.processingFee)) {
+    this.processingFee = 0;
+  }
+  
+  // Calculate total amount
   this.totalAmount = this.amount + this.processingFee;
+  
+  // Ensure totalAmount is valid
+  if (isNaN(this.totalAmount)) {
+    this.totalAmount = 0;
+  }
+  
   this.updatedAt = new Date();
   next();
 });

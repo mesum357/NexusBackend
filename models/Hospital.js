@@ -66,7 +66,7 @@ const hospitalSchema = new mongoose.Schema({
   verified: { type: Boolean, default: false },
   approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   approvalNotes: { type: String }, // Admin notes for approval/rejection
-  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Users' }, // Admin who approved/rejected
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Admin who approved/rejected
   approvedAt: { type: Date }, // When it was approved/rejected
   
   // Ratings and Reviews
@@ -82,7 +82,7 @@ const hospitalSchema = new mongoose.Schema({
   ambulanceService: { type: Boolean, default: false },
   
   // Owner Information
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'Users', required: true },
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   ownerName: { type: String, default: '' },
   ownerEmail: { type: String, default: '' },
   ownerPhone: { type: String, default: '' },
