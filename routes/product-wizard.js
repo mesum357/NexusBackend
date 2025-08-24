@@ -8,6 +8,27 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
   try {
     console.log('📱 Product wizard creation from JSON request received');
     console.log('📱 Request body:', req.body);
+    console.log('📱 Request headers:', req.headers);
+    console.log('📱 User authenticated:', req.user._id);
+    
+    // Debug data types
+    console.log('📱 Data type debugging:');
+    console.log('  - images type:', typeof req.body.images);
+    console.log('  - images value:', req.body.images);
+    console.log('  - tags type:', typeof req.body.tags);
+    console.log('  - tags value:', req.body.tags);
+    console.log('  - specifications type:', typeof req.body.specifications);
+    console.log('  - specifications value:', req.body.specifications);
+    console.log('  - price type:', typeof req.body.price);
+    console.log('  - price value:', req.body.price);
+    
+    // Debug user authentication
+    console.log('📱 User authentication debugging:');
+    console.log('  - req.user exists:', !!req.user);
+    console.log('  - req.user._id:', req.user?._id);
+    console.log('  - req.user._id type:', typeof req.user?._id);
+    console.log('  - req.user.username:', req.user?.username);
+    console.log('  - req.user.email:', req.user?.email);
     
     const {
       title,
@@ -42,8 +63,8 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
         const parsedImages = JSON.parse(images);
         productImages = Array.isArray(parsedImages) ? parsedImages : [];
       } catch (parseError) {
-        console.error('📱 Error parsing images JSON:', parseError);
-        productImages = [];
+        console.warn('📱 Could not parse images JSON, treating as string:', parseError.message);
+        productImages = [images];
       }
     }
     
@@ -58,8 +79,8 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       try {
         parsedSpecifications = JSON.parse(specifications);
       } catch (parseError) {
-        console.error('📱 Error parsing specifications JSON:', parseError);
-        parsedSpecifications = {};
+        console.warn('📱 Could not parse specifications JSON, treating as string:', parseError.message);
+        parsedSpecifications = { note: specifications };
       }
     } else if (specifications && typeof specifications === 'object') {
       parsedSpecifications = specifications;
@@ -71,12 +92,17 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       try {
         parsedTags = JSON.parse(tags);
       } catch (parseError) {
-        console.error('📱 Error parsing tags JSON:', parseError);
-        parsedTags = [];
+        console.warn('📱 Could not parse tags JSON, treating as string:', parseError.message);
+        parsedTags = [tags];
       }
     } else if (Array.isArray(tags)) {
       parsedTags = tags;
     }
+    
+    console.log('📱 Parsed data:');
+    console.log('  - images:', productImages);
+    console.log('  - tags:', parsedTags);
+    console.log('  - specifications:', parsedSpecifications);
 
     // Create product data
     const productData = {
@@ -104,10 +130,87 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       approvalStatus: approvalStatus || 'pending' // Start with pending status
     };
 
+    // Final validation check
+    console.log('📱 Final validation check:');
+    const requiredFields = ['title', 'description', 'price', 'category', 'location', 'city', 'owner'];
+    const missingFields = requiredFields.filter(field => !productData[field]);
+    
+    if (missingFields.length > 0) {
+      console.error('📱 Missing required fields:', missingFields);
+      return res.status(400).json({
+        error: 'Missing required fields',
+        details: `Missing: ${missingFields.join(', ')}`
+      });
+    }
+    
+    console.log('📱 All required fields present ✓');
+
     console.log('📱 Creating product with data:', productData);
     console.log('📱 Generated Agent ID:', productData.agentId);
+    console.log('📱 Required fields check:');
+    console.log('  - title:', !!productData.title);
+    console.log('  - description:', !!productData.description);
+    console.log('  - price:', !!productData.price);
+    console.log('  - category:', !!productData.category);
+    console.log('  - location:', !!productData.location);
+    console.log('  - city:', !!productData.city);
+    console.log('  - owner:', !!productData.owner);
+    
+    // Debug the final data structure
+    console.log('📱 Final productData structure:');
+    console.log('  - images length:', productData.images?.length);
+    console.log('  - tags length:', productData.tags?.length);
+    console.log('  - specifications keys:', Object.keys(productData.specifications || {}));
+    console.log('  - price:', productData.price);
+    console.log('  - priceType:', productData.priceType);
+    console.log('  - condition:', productData.condition);
+    console.log('  - contactPreference:', productData.contactPreference);
 
     // Create and save the product
+    console.log('📱 Attempting to save product to database...');
+    
+    // Test if the model can be created with this data
+    try {
+      const testProduct = new Product(productData);
+      console.log('📱 Model validation passed, test product created successfully');
+    } catch (validationError) {
+      console.error('📱 Model validation failed:', validationError);
+      console.error('📱 Validation error details:', validationError.errors);
+      
+      // Log each validation error in detail
+      if (validationError.errors) {
+        Object.keys(validationError.errors).forEach(field => {
+          const error = validationError.errors[field];
+          console.error(`📱 Field '${field}' validation error:`, {
+            kind: error.kind,
+            value: error.value,
+            message: error.message,
+            path: error.path
+          });
+        });
+      }
+      
+      return res.status(400).json({
+        error: 'Product data validation failed',
+        details: validationError.message,
+        validationErrors: validationError.errors
+      });
+    }
+    
+    // Check MongoDB connection status
+    const mongoose = require('mongoose');
+    const dbState = mongoose.connection.readyState;
+    console.log('📱 MongoDB connection state:', dbState);
+    console.log('📱 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting');
+
+    if (dbState !== 1) {
+      console.error('📱 MongoDB not connected, current state:', dbState);
+      return res.status(500).json({
+        error: 'Database connection not available',
+        details: 'MongoDB connection state: ' + dbState
+      });
+    }
+
     const product = new Product(productData);
     const savedProduct = await product.save();
 
@@ -125,6 +228,56 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
     console.error('📱 Error creating product from wizard:', error);
     res.status(500).json({
       error: 'Failed to create product',
+      details: error.message
+    });
+  }
+});
+
+// Test endpoint with minimal required fields only
+router.post('/test-minimal', ensureAuthenticated, async (req, res) => {
+  try {
+    console.log('🧪 MINIMAL TEST: Creating product with minimal fields...');
+
+    const minimalProduct = {
+      title: 'Minimal Test Product',
+      description: 'Minimal test product description',
+      price: 1000,
+      category: 'Test Category',
+      location: 'Test Location',
+      city: 'Test City',
+      owner: req.user._id,
+      ownerName: req.user.username || req.user.email || '',
+      ownerPhone: req.user.phone || '',
+      ownerEmail: req.user.email || '',
+      agentId: `PROD_${Date.now()}`,
+      approvalStatus: 'pending'
+    };
+
+    console.log('🧪 MINIMAL TEST: Minimal product data:', minimalProduct);
+
+    const product = new Product(minimalProduct);
+    const savedProduct = await product.save();
+
+    console.log('🧪 MINIMAL TEST: Minimal product created successfully:', savedProduct._id);
+
+    res.status(201).json({
+      success: true,
+      message: 'Minimal product created successfully',
+      product: savedProduct
+    });
+
+  } catch (error) {
+    console.error('🧪 MINIMAL TEST: Error creating minimal product:', error);
+    console.error('🧪 MINIMAL TEST: Error stack:', error.stack);
+    console.error('🧪 MINIMAL TEST: Error name:', error.name);
+    console.error('🧪 MINIMAL TEST: Error message:', error.message);
+    
+    if (error.name === 'ValidationError') {
+      console.error('🧪 MINIMAL TEST: Mongoose validation errors:', error.errors);
+    }
+    
+    res.status(500).json({
+      error: 'Failed to create minimal product',
       details: error.message
     });
   }

@@ -77,18 +77,33 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
     const shopBannerPath = req.body.shopBanner || 'https://picsum.photos/800/400?random=2';
     const ownerProfilePath = req.body.ownerProfilePhoto || 'https://picsum.photos/100/100?random=3';
 
+    console.log('🖼️ Image data received:');
+    console.log('   - shopLogo:', req.body.shopLogo);
+    console.log('   - shopBanner:', req.body.shopBanner);
+    console.log('   - ownerProfilePhoto:', req.body.ownerProfilePhoto);
+    console.log('   - Final shopLogoPath:', shopLogoPath);
+    console.log('   - Final shopBannerPath:', shopBannerPath);
+    console.log('   - Final ownerProfilePath:', ownerProfilePath);
+
     // Process products to ensure image field is properly set
     const processedProducts = parsedProducts.map(product => {
       // Handle both single imagePreview and array imagePreviews
       let finalImage = product.image;
       
-      if (!finalImage) {
+      // Check if the image field contains a Cloudinary URL (from PaymentSection)
+      if (finalImage && finalImage.startsWith('https://res.cloudinary.com')) {
+        console.log(`📦 Product "${product.name}" has Cloudinary image:`, finalImage);
+      } else if (!finalImage) {
+        // Fallback to imagePreviews if image field is empty
         if (product.imagePreviews && Array.isArray(product.imagePreviews) && product.imagePreviews.length > 0) {
           finalImage = product.imagePreviews[0]; // Use first image from array
+          console.log(`📦 Product "${product.name}" using imagePreviews[0]:`, finalImage);
         } else if (product.imagePreview) {
           finalImage = product.imagePreview; // Fallback to single imagePreview
+          console.log(`📦 Product "${product.name}" using imagePreview:`, finalImage);
         } else {
           finalImage = 'https://picsum.photos/150/150?random=4'; // Default placeholder
+          console.log(`📦 Product "${product.name}" using default placeholder`);
         }
       }
       
@@ -134,6 +149,10 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
     console.log('📝 Shop approval status will be: pending (requires payment verification)');
     console.log('📦 Products being saved:', shopData.products);
     console.log('📦 Number of products:', shopData.products ? shopData.products.length : 0);
+    console.log('🖼️ Image data being saved:');
+    console.log('   - shopLogo:', shopData.shopLogo);
+    console.log('   - shopBanner:', shopData.shopBanner);
+    console.log('   - ownerProfilePhoto:', shopData.ownerProfilePhoto);
     
     // Debug each product individually
     if (shopData.products && shopData.products.length > 0) {

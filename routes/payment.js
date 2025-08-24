@@ -147,7 +147,46 @@ router.get('/my', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Link payment request to shop
+// Link payment request to any entity (generic)
+router.put('/:transactionId/link-entity', ensureAuthenticated, async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const { entityId, entityType } = req.body;
+    
+    if (!entityId) {
+      return res.status(400).json({ error: 'Entity ID is required' });
+    }
+    
+    if (!entityType) {
+      return res.status(400).json({ error: 'Entity type is required' });
+    }
+    
+    // Find the payment request by transaction ID
+    const paymentRequest = await PaymentRequest.findOne({ transactionId });
+    if (!paymentRequest) {
+      return res.status(404).json({ error: 'Payment request not found' });
+    }
+    
+    // Update the payment request with the entity ID and type
+    paymentRequest.entityId = entityId;
+    paymentRequest.entityType = entityType;
+    await paymentRequest.save();
+    
+    console.log(`✅ Payment request ${transactionId} linked to ${entityType} ${entityId}`);
+    
+    res.json({ 
+      success: true, 
+      message: `Payment request linked to ${entityType} successfully`,
+      paymentRequest 
+    });
+    
+  } catch (error) {
+    console.error('Error linking payment to entity:', error);
+    res.status(500).json({ error: 'Failed to link payment to entity' });
+  }
+});
+
+// Link payment request to shop (legacy endpoint - kept for backward compatibility)
 router.put('/:transactionId/link-shop', ensureAuthenticated, async (req, res) => {
   try {
     const { transactionId } = req.params;
@@ -165,6 +204,7 @@ router.put('/:transactionId/link-shop', ensureAuthenticated, async (req, res) =>
     
     // Update the payment request with the shop ID
     paymentRequest.entityId = shopId;
+    paymentRequest.entityType = 'shop';
     await paymentRequest.save();
     
     console.log(`✅ Payment request ${transactionId} linked to shop ${shopId}`);

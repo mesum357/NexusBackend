@@ -5,11 +5,12 @@ const patientApplicationSchema = new mongoose.Schema({
   patient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   patientName: { type: String, required: true },
   patientAge: { type: Number, required: true },
-  patientGender: { type: String, enum: ['Male', 'Female', 'Other'], required: true },
+  patientGender: { type: String, enum: ['male', 'female', 'other'], required: true },
   contactNumber: { type: String, required: true },
   emergencyContact: { type: String },
   medicalHistory: { type: String },
   symptoms: { type: String },
+  treatmentType: { type: String, required: true },
   preferredDate: { type: Date },
   status: { type: String, enum: ['pending', 'approved', 'rejected', 'completed'], default: 'pending' },
   notes: { type: String }, // Admin notes for approval/rejection

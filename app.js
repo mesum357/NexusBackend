@@ -763,7 +763,7 @@ app.get('/api/admin/public/stats', async function(req, res) {
     ]);
 
     console.log('✅ Stats calculated successfully');
-    
+
     res.json({
       entities: {
         institutes: { total: totalInstitutes, pending: pendingInstitutes },
@@ -803,7 +803,7 @@ app.get('/api/admin/public/pending-entities', async function(req, res) {
       }
       return {
         ...entityData,
-        entityType: 'institute'
+      entityType: 'institute'
       };
     });
     
@@ -819,7 +819,7 @@ app.get('/api/admin/public/pending-entities', async function(req, res) {
       }
       return {
         ...entityData,
-        entityType: 'shop'
+      entityType: 'shop'
       };
     });
     
@@ -835,7 +835,7 @@ app.get('/api/admin/public/pending-entities', async function(req, res) {
       }
       return {
         ...entityData,
-        entityType: 'product'
+      entityType: 'product'
       };
     });
 
@@ -1075,14 +1075,14 @@ app.get('/api/admin/public/users', async function(req, res) {
     if (verified === 'true') query.verified = true;
     if (verified === 'false') query.verified = false;
     
-         const [users, total] = await Promise.all([
+    const [users, total] = await Promise.all([
        User.find(query)
-         .select('-password')
-         .sort({ createdAt: -1 })
-         .skip(skip)
-         .limit(limit),
+        .select('-password')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
        User.countDocuments(query)
-     ]);
+    ]);
     
     const totalPages = Math.ceil(total / limit);
     
@@ -1118,6 +1118,100 @@ app.put('/api/admin/public/payment-request/:id/status', async function(req, res)
 
     await paymentRequest.save();
 
+    // If payment is verified, automatically approve the corresponding entity
+    if (status === 'verified') {
+      console.log(`🔄 Payment verified, automatically approving ${paymentRequest.entityType}...`);
+      
+      try {
+        // Import models based on entity type
+        let EntityModel;
+        
+        switch (paymentRequest.entityType) {
+          case 'shop':
+            EntityModel = require('./models/Shop');
+            break;
+          case 'institute':
+            EntityModel = require('./models/Institute');
+            break;
+          case 'hospital':
+            EntityModel = require('./models/Hospital');
+            break;
+          case 'marketplace':
+            EntityModel = require('./models/Product');
+            break;
+          default:
+            console.warn(`⚠️ Unknown entity type: ${paymentRequest.entityType}`);
+            break;
+        }
+
+        if (EntityModel) {
+          // First try to find by entityId if available
+          let pendingEntity = null;
+          
+          if (paymentRequest.entityId) {
+            console.log(`🔍 Searching for entity by ID: ${paymentRequest.entityId}`);
+            pendingEntity = await EntityModel.findById(paymentRequest.entityId);
+            
+            if (pendingEntity && pendingEntity.approvalStatus === 'pending') {
+              console.log(`✅ Found pending entity by ID: ${pendingEntity._id}`);
+            } else {
+              pendingEntity = null;
+            }
+          }
+          
+          // If not found by entityId, search by owner and status
+          if (!pendingEntity) {
+            console.log(`🔍 Searching for pending ${paymentRequest.entityType} for user ${paymentRequest.user}`);
+            
+            // Try different search strategies
+            const searchQueries = [
+              { owner: paymentRequest.user, approvalStatus: 'pending' },
+              { owner: paymentRequest.user.toString(), approvalStatus: 'pending' }
+            ];
+            
+            for (const query of searchQueries) {
+              console.log(`   - Trying query:`, query);
+              pendingEntity = await EntityModel.findOne(query);
+              
+              if (pendingEntity) {
+                console.log(`   - ✅ Found entity with query:`, query);
+                break;
+              }
+            }
+            
+            // If still not found, let's check what entities exist for this user
+            if (!pendingEntity) {
+              console.log(`   - 🔍 No pending entities found, checking all entities for user ${paymentRequest.user}`);
+              const allUserEntities = await EntityModel.find({ owner: paymentRequest.user });
+              console.log(`   - 📊 Total entities found for user: ${allUserEntities.length}`);
+              
+              allUserEntities.forEach((entity, index) => {
+                console.log(`     ${index + 1}. ID: ${entity._id}, Status: ${entity.approvalStatus}, Name: ${entity.name || entity.shopName || entity.title}`);
+              });
+            }
+          }
+          
+          if (pendingEntity) {
+            // Update entity approval status to approved
+            pendingEntity.approvalStatus = 'approved';
+            pendingEntity.approvedAt = new Date();
+            pendingEntity.paymentVerified = true;
+            pendingEntity.paymentRequestId = paymentRequest._id;
+            
+            await pendingEntity.save();
+            
+            console.log(`✅ ${paymentRequest.entityType} ${pendingEntity._id} automatically approved after payment verification`);
+            console.log(`   - Entity will now appear on the appropriate page`);
+          } else {
+            console.warn(`⚠️ No pending ${paymentRequest.entityType} found for user ${paymentRequest.user}`);
+          }
+        }
+      } catch (entityError) {
+        console.error('Error auto-approving entity:', entityError);
+        // Don't fail the payment verification if entity approval fails
+      }
+    }
+
     res.json({ 
       success: true, 
       message: `Payment request ${status} successfully`,
@@ -1137,19 +1231,40 @@ app.get('/', (req, res) => {
 // Image upload endpoint for wizard
 app.post('/api/upload/image', upload.single('image'), async (req, res) => {
   try {
+    console.log('🖼️ Image upload request received');
+    console.log('   - File:', req.file);
+    console.log('   - File path:', req.file?.path);
+    console.log('   - File URL:', req.file?.url);
+    console.log('   - File secure URL:', req.file?.secure_url);
+    
     if (!req.file) {
+      console.error('❌ No image file provided');
       return res.status(400).json({ error: 'No image file provided' });
     }
-    
 
+    // Determine the final image URL
+    let imageUrl = req.file.path; // Default to path
+    
+    if (req.file.secure_url) {
+      imageUrl = req.file.secure_url; // Prefer secure HTTPS URL
+      console.log('   - ✅ Using secure URL from Cloudinary');
+    } else if (req.file.url) {
+      imageUrl = req.file.url; // Fallback to regular URL
+      console.log('   - ✅ Using regular URL from Cloudinary');
+    } else if (req.file.path) {
+      imageUrl = req.file.path; // Fallback to path
+      console.log('   - ✅ Using file path');
+    }
+    
+    console.log('   - Final imageUrl:', imageUrl);
     
     res.json({
       success: true,
-      imageUrl: req.file.path, // Cloudinary URL
+      imageUrl: imageUrl, // Cloudinary URL
       message: 'Image uploaded successfully'
     });
   } catch (error) {
-    console.error('Error uploading image:', error);
+    console.error('❌ Error uploading image:', error);
     res.status(500).json({ error: 'Failed to upload image' });
   }
 });
@@ -1173,7 +1288,7 @@ app.post('/forgot-password', async (req, res) => {
   const user = await User.findOne({ email });
   if (!user) {
     // For security, always respond with success
-    return res.status(200).json({ message: 'If your email is registered, you’ll receive a reset link shortly.' });
+    return res.status(200).json({ message: 'If your email is registered, you will receive a reset link shortly.' });
   }
   // Generate reset token
   const resetToken = crypto.randomBytes(32).toString('hex');
@@ -1189,7 +1304,7 @@ app.post('/forgot-password', async (req, res) => {
     subject: 'Password Reset Request',
     html: `<p>You requested a password reset. Click the link below to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, you can ignore this email.</p>`
   });
-  res.status(200).json({ message: 'If your email is registered, you’ll receive a reset link shortly.' });
+  res.status(200).json({ message: 'If your email is registered, you will receive a reset link shortly.' });
 });
 
 // Reset Password: Update password
@@ -1224,11 +1339,26 @@ app.post('/api/admin/approve-entity', async function(req, res) {
     try {
         const { userId, entityType, paymentRequestId } = req.body;
         
+        console.log('🔍 Approve Entity Request:', {
+            userId,
+            entityType,
+            paymentRequestId,
+            adminUser: req.user?._id,
+            adminRole: req.user?.role
+        });
+        
         if (!userId || !entityType || !paymentRequestId) {
+            console.error('❌ Missing required fields:', { userId, entityType, paymentRequestId });
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        console.log(`Approving ${entityType} for user ${userId} after payment verification`);
+        // Check if user is admin
+        if (!req.user || req.user.role !== 'admin') {
+            console.error('❌ Unauthorized access attempt:', { userId: req.user?._id, role: req.user?.role });
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        console.log(`✅ Admin ${req.user._id} (${req.user.role}) approving ${entityType} for user ${userId} after payment verification`);
 
         // Import models based on entity type
         let EntityModel;
@@ -1252,6 +1382,7 @@ app.post('/api/admin/approve-entity', async function(req, res) {
                 entityCollection = 'products';
                 break;
             default:
+                console.error('❌ Invalid entity type:', entityType);
                 return res.status(400).json({ error: 'Invalid entity type' });
         }
 
@@ -1282,18 +1413,18 @@ app.post('/api/admin/approve-entity', async function(req, res) {
         // If not found by entityId, fall back to searching by owner and status
         if (!pendingEntity) {
             console.log(`🔍 Searching for pending ${entityType} for user ${userId}...`);
-            
-            if (entityType === 'shop') {
-                pendingEntity = await EntityModel.findOne({ 
-                    owner: userId, 
-                    approvalStatus: 'pending' 
-                });
+        
+        if (entityType === 'shop') {
+            pendingEntity = await EntityModel.findOne({ 
+                owner: userId, 
+                approvalStatus: 'pending' 
+            });
                 console.log(`   - Shop search query: { owner: ${userId}, approvalStatus: 'pending' }`);
-            } else if (entityType === 'institute') {
-                pendingEntity = await EntityModel.findOne({ 
-                    owner: userId, 
-                    approvalStatus: 'pending' 
-                });
+        } else if (entityType === 'institute') {
+            pendingEntity = await EntityModel.findOne({ 
+                owner: userId, 
+                approvalStatus: 'pending' 
+            });
                 console.log(`   - Institute search query: { owner: ${userId}, approvalStatus: 'pending' }`);
             } else if (entityType === 'hospital') {
                 pendingEntity = await EntityModel.findOne({ 
@@ -1301,20 +1432,26 @@ app.post('/api/admin/approve-entity', async function(req, res) {
                     approvalStatus: 'pending' 
                 });
                 console.log(`   - Hospital search query: { owner: ${userId}, approvalStatus: 'pending' }`);
+                console.log(`   - Hospital search result:`, pendingEntity ? {
+                    id: pendingEntity._id,
+                    name: pendingEntity.name,
+                    approvalStatus: pendingEntity.approvalStatus,
+                    owner: pendingEntity.owner
+                } : 'Not found');
             } else if (entityType === 'marketplace') {
                 pendingEntity = await EntityModel.findOne({ 
                     owner: userId, 
                     approvalStatus: 'pending' 
                 });
                 console.log(`   - Product search query: { owner: ${userId}, approvalStatus: 'pending' }`);
-            } else {
-                // For other entity types, try to find by userId or owner field
-                pendingEntity = await EntityModel.findOne({ 
-                    $or: [
-                        { userId: userId, approvalStatus: 'pending' },
-                        { owner: userId, approvalStatus: 'pending' }
-                    ]
-                });
+        } else {
+            // For other entity types, try to find by userId or owner field
+            pendingEntity = await EntityModel.findOne({ 
+                $or: [
+                    { userId: userId, approvalStatus: 'pending' },
+                    { owner: userId, approvalStatus: 'pending' }
+                ]
+            });
                 console.log(`   - Other entity search query: { $or: [{ userId: ${userId}, approvalStatus: 'pending' }, { owner: ${userId}, approvalStatus: 'pending' }] }`);
             }
         }
@@ -1369,13 +1506,21 @@ app.post('/api/admin/approve-entity', async function(req, res) {
         pendingEntity.paymentVerified = true;
         pendingEntity.paymentRequestId = paymentRequestId;
         
-        await pendingEntity.save();
-
-        console.log(`${entityType} ${pendingEntity._id} approved successfully for user ${userId}`);
-        console.log(`✅ ${entityType} will now appear on the appropriate page automatically`);
-        console.log(`   - approvalStatus: ${pendingEntity.approvalStatus}`);
+        console.log(`🔄 Updating ${entityType} approval status...`);
+        console.log(`   - Entity ID: ${pendingEntity._id}`);
+        console.log(`   - Entity Name: ${pendingEntity.name || pendingEntity.shopName || 'N/A'}`);
+        console.log(`   - Old approvalStatus: ${pendingEntity.approvalStatus}`);
+        console.log(`   - New approvalStatus: approved`);
         console.log(`   - approvedAt: ${pendingEntity.approvedAt}`);
         console.log(`   - paymentVerified: ${pendingEntity.paymentVerified}`);
+        
+        await pendingEntity.save();
+
+        console.log(`✅ ${entityType} ${pendingEntity._id} approved successfully for user ${userId}`);
+        console.log(`✅ ${entityType} will now appear on the appropriate page automatically`);
+        console.log(`   - Final approvalStatus: ${pendingEntity.approvalStatus}`);
+        console.log(`   - Final approvedAt: ${pendingEntity.approvedAt}`);
+        console.log(`   - Final paymentVerified: ${pendingEntity.paymentVerified}`);
 
         res.json({ 
             success: true, 
@@ -1603,8 +1748,8 @@ app.post('/api/categories/create-emoji-categories', async function(req, res) {
   } catch (error) {
     console.error('Error creating emoji categories:', error);
     res.status(500).json({ error: 'Failed to create emoji categories' });
-  }
-});
+    }
+  });
 
 // Public endpoint to initialize categories (no authentication required)
 app.post('/api/categories/initialize-public', async function(req, res) {
@@ -1815,4 +1960,64 @@ app.use('/uploads', express.static(uploadsDir));
 
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+// Test endpoint to check entity approval status
+app.get('/api/test/entity-approval/:entityType/:userId', async function(req, res) {
+  try {
+    const { entityType, userId } = req.params;
+    
+    console.log(`🔍 Testing entity approval for ${entityType} user ${userId}`);
+    
+    // Import models based on entity type
+    let EntityModel;
+    let entityCollection;
+    
+    switch (entityType) {
+      case 'shop':
+        EntityModel = require('./models/Shop');
+        entityCollection = 'shops';
+        break;
+      case 'institute':
+        EntityModel = require('./models/Institute');
+        entityCollection = 'institutes';
+        break;
+      case 'hospital':
+        EntityModel = require('./models/Hospital');
+        entityCollection = 'hospitals';
+        break;
+      case 'marketplace':
+        EntityModel = require('./models/Product');
+        entityCollection = 'products';
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid entity type' });
+    }
+    
+    // Find all entities for this user
+    const allEntities = await EntityModel.find({ owner: userId });
+    console.log(`📊 Found ${allEntities.length} ${entityType} entities for user ${userId}`);
+    
+    const entityDetails = allEntities.map(entity => ({
+      id: entity._id,
+      name: entity.name || entity.shopName || entity.title,
+      approvalStatus: entity.approvalStatus,
+      createdAt: entity.createdAt,
+      approvedAt: entity.approvedAt,
+      paymentVerified: entity.paymentVerified,
+      paymentRequestId: entity.paymentRequestId
+    }));
+    
+    res.json({
+      success: true,
+      entityType,
+      userId,
+      totalEntities: allEntities.length,
+      entities: entityDetails
+    });
+    
+  } catch (error) {
+    console.error('Error testing entity approval:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });

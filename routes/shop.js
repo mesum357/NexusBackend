@@ -94,9 +94,136 @@ router.get('/all', async (req, res) => {
   try {
     const shops = await Shop.find({ approvalStatus: 'approved' }).sort({ createdAt: -1 }); // Only show approved shops
     console.log('Found shops:', shops.length);
-    res.json({ shops });
+    
+    // Process each shop's products to ensure image fields are properly populated
+    const processedShops = shops.map(shop => {
+      const processedShop = shop.toObject();
+      
+      if (processedShop.products && processedShop.products.length > 0) {
+        console.log(`🖼️ Processing products for shop "${processedShop.shopName}" (${processedShop.products.length} products)`);
+        
+        processedShop.products = processedShop.products.map((product, index) => {
+          // Create a new product object to avoid modifying the original
+          const processedProduct = { ...product };
+          
+          console.log(`   📦 Product ${index + 1} "${processedProduct.name}":`);
+          console.log(`     - Original image: ${processedProduct.image || 'NOT SET'}`);
+          console.log(`     - imagePreviews: ${processedProduct.imagePreviews ? JSON.stringify(processedProduct.imagePreviews) : 'NOT SET'}`);
+          console.log(`     - imagePreview: ${processedProduct.imagePreview || 'NOT SET'}`);
+          
+          // If product has no image field or empty image, check for alternatives
+          if (!processedProduct.image || processedProduct.image === '') {
+            // Check if there's an imagePreviews array (from new data)
+            if (processedProduct.imagePreviews && Array.isArray(processedProduct.imagePreviews) && processedProduct.imagePreviews.length > 0) {
+              processedProduct.image = processedProduct.imagePreviews[0];
+              console.log(`     - ✅ Using imagePreviews[0]: ${processedProduct.image}`);
+            }
+            // Check if there's an imagePreview field (from old data)
+            else if (processedProduct.imagePreview && processedProduct.imagePreview !== '') {
+              processedProduct.image = processedProduct.imagePreview;
+              console.log(`     - ✅ Using imagePreview: ${processedProduct.image}`);
+            } else {
+              // Use placeholder if no image is available
+              processedProduct.image = 'https://picsum.photos/150/150?random=4';
+              console.log(`     - ⚠️ Using placeholder image: ${processedProduct.image}`);
+            }
+          } else {
+            console.log(`     - ✅ Image already set: ${processedProduct.image}`);
+          }
+          
+          // Ensure the image field is not undefined or null
+          if (!processedProduct.image) {
+            processedProduct.image = 'https://picsum.photos/150/150?random=4';
+            console.log(`     - 🔄 Final fallback to placeholder: ${processedProduct.image}`);
+          }
+          
+          console.log(`     - Final image: ${processedProduct.image}`);
+          return processedProduct;
+        });
+      }
+      
+      return processedShop;
+    });
+    
+    res.json({ shops: processedShops });
   } catch (error) {
     console.error('Error fetching shops:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test endpoint to get all shops including pending ones
+router.get('/all-debug', async (req, res) => {
+  try {
+    const allShops = await Shop.find({}).sort({ createdAt: -1 });
+    const approvedShops = allShops.filter(shop => shop.approvalStatus === 'approved');
+    const pendingShops = allShops.filter(shop => shop.approvalStatus === 'pending');
+    const rejectedShops = allShops.filter(shop => shop.approvalStatus === 'rejected');
+    
+    console.log('Debug - All shops found:', allShops.length);
+    console.log('Debug - Approved shops:', approvedShops.length);
+    console.log('Debug - Pending shops:', pendingShops.length);
+    console.log('Debug - Rejected shops:', rejectedShops.length);
+    
+    res.json({ 
+      allShops,
+      approvedShops,
+      pendingShops,
+      rejectedShops,
+      counts: {
+        total: allShops.length,
+        approved: approvedShops.length,
+        pending: pendingShops.length,
+        rejected: rejectedShops.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all shops for debug:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test endpoint to get a specific shop's data for debugging
+router.get('/debug/:shopId', async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+    
+    console.log('Debug - Shop data for:', shop.shopName);
+    console.log('   - ID:', shop._id);
+    console.log('   - Approval Status:', shop.approvalStatus);
+    console.log('   - shopLogo:', shop.shopLogo);
+    console.log('   - shopBanner:', shop.shopBanner);
+    console.log('   - ownerProfilePhoto:', shop.ownerProfilePhoto);
+    console.log('   - Products count:', shop.products ? shop.products.length : 0);
+    
+    if (shop.products && shop.products.length > 0) {
+      shop.products.forEach((product, index) => {
+        console.log(`   - Product ${index + 1}:`, {
+          name: product.name,
+          image: product.image
+        });
+      });
+    }
+    
+    res.json({ 
+      shop,
+      debug: {
+        id: shop._id,
+        name: shop.shopName,
+        approvalStatus: shop.approvalStatus,
+        images: {
+          logo: shop.shopLogo,
+          banner: shop.shopBanner,
+          ownerProfile: shop.ownerProfilePhoto
+        },
+        productsCount: shop.products ? shop.products.length : 0
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching shop for debug:', error);
     res.status(500).json({ error: error.message });
   }
 });

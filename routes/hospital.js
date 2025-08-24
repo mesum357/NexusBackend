@@ -198,6 +198,69 @@ router.post('/create', (req, res, next) => {
   }
 });
 
+// Test endpoint to get all hospitals including pending ones
+router.get('/all-debug', async (req, res) => {
+  try {
+    const allHospitals = await Hospital.find({}).sort({ createdAt: -1 });
+    const approvedHospitals = allHospitals.filter(hospital => hospital.approvalStatus === 'approved');
+    const pendingHospitals = allHospitals.filter(hospital => hospital.approvalStatus === 'pending');
+    const rejectedHospitals = allHospitals.filter(hospital => hospital.approvalStatus === 'rejected');
+    
+    console.log('Debug - All hospitals found:', allHospitals.length);
+    console.log('Debug - Approved hospitals:', approvedHospitals.length);
+    console.log('Debug - Pending hospitals:', pendingHospitals.length);
+    console.log('Debug - Rejected hospitals:', rejectedHospitals.length);
+    
+    res.json({ 
+      allHospitals,
+      approvedHospitals,
+      pendingHospitals,
+      rejectedHospitals,
+      counts: {
+        total: allHospitals.length,
+        approved: approvedHospitals.length,
+        pending: pendingHospitals.length,
+        rejected: rejectedHospitals.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all hospitals for debug:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test endpoint to get a specific hospital's data for debugging
+router.get('/debug/:hospitalId', async (req, res) => {
+  try {
+    const hospital = await Hospital.findById(req.params.hospitalId);
+    if (!hospital) {
+      return res.status(404).json({ error: 'Hospital not found' });
+    }
+    
+    console.log('Debug - Hospital data for:', hospital.name);
+    console.log('   - ID:', hospital._id);
+    console.log('   - Approval Status:', hospital.approvalStatus);
+    console.log('   - Owner:', hospital.owner);
+    console.log('   - Created At:', hospital.createdAt);
+    console.log('   - Updated At:', hospital.updatedAt);
+    
+    res.json({ 
+      hospital,
+      debug: {
+        id: hospital._id,
+        name: hospital.name,
+        approvalStatus: hospital.approvalStatus,
+        owner: hospital.owner,
+        createdAt: hospital.createdAt,
+        updatedAt: hospital.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching hospital for debug:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all hospitals
 router.get('/all', async (req, res) => {
   try {
@@ -222,6 +285,10 @@ router.get('/all', async (req, res) => {
       ];
     }
 
+    console.log('🏥 Hospital /all endpoint called');
+    console.log('   - Query:', JSON.stringify(query));
+    console.log('   - Page:', page, 'Limit:', limit);
+
     const [hospitals, total] = await Promise.all([
       Hospital.find(query)
         .populate('owner', 'username fullName email')
@@ -230,6 +297,29 @@ router.get('/all', async (req, res) => {
         .limit(parseInt(limit)),
       Hospital.countDocuments(query)
     ]);
+
+    console.log('🏥 Hospitals found:', hospitals.length);
+    console.log('🏥 Total hospitals in database:', total);
+    
+    if (hospitals.length > 0) {
+      hospitals.forEach((hospital, index) => {
+        console.log(`   Hospital ${index + 1}:`, {
+          name: hospital.name,
+          id: hospital._id,
+          approvalStatus: hospital.approvalStatus,
+          owner: hospital.owner
+        });
+      });
+    } else {
+      console.log('   ❌ No hospitals found with query:', query);
+      
+      // Debug: Check all hospitals in database
+      const allHospitals = await Hospital.find({});
+      console.log('   🔍 All hospitals in database:', allHospitals.length);
+      allHospitals.forEach(hospital => {
+        console.log(`     - ${hospital.name}: ${hospital.approvalStatus} (ID: ${hospital._id})`);
+      });
+    }
 
     const totalPages = Math.ceil(total / limit);
 
@@ -248,16 +338,26 @@ router.get('/all', async (req, res) => {
 // Get single hospital by ID
 router.get('/:id', async (req, res) => {
   try {
+    console.log('🏥 Hospital detail request for ID:', req.params.id);
+    
     const hospital = await Hospital.findById(req.params.id)
       .populate('owner', 'username fullName email profileImage');
 
     if (!hospital) {
+      console.log('❌ Hospital not found with ID:', req.params.id);
       return res.status(404).json({ error: 'Hospital not found' });
     }
 
+    console.log('✅ Hospital found:', {
+      id: hospital._id,
+      name: hospital.name,
+      approvalStatus: hospital.approvalStatus,
+      owner: hospital.owner
+    });
+
     res.json({ hospital });
   } catch (error) {
-    console.error('Error fetching hospital:', error);
+    console.error('❌ Error fetching hospital:', error);
     res.status(500).json({ error: 'Failed to fetch hospital' });
   }
 });
@@ -333,10 +433,10 @@ router.delete('/:id', ensureAuthenticated, async (req, res) => {
 router.post('/:id/patient-application', ensureAuthenticated, async (req, res) => {
   try {
     const hospitalId = req.params.id;
-    const { patientName, patientAge, patientGender, contactNumber, emergencyContact, medicalHistory, symptoms, preferredDate } = req.body;
+    const { patientName, patientAge, patientGender, contactNumber, emergencyContact, medicalHistory, symptoms, treatmentType, preferredDate } = req.body;
 
-    if (!patientName || !patientAge || !contactNumber) {
-      return res.status(400).json({ error: 'Patient name, age, and contact number are required' });
+    if (!patientName || !patientAge || !contactNumber || !treatmentType) {
+      return res.status(400).json({ error: 'Patient name, age, contact number, and treatment type are required' });
     }
 
     const hospital = await Hospital.findById(hospitalId);
@@ -352,6 +452,7 @@ router.post('/:id/patient-application', ensureAuthenticated, async (req, res) =>
       emergencyContact,
       medicalHistory,
       symptoms,
+      treatmentType,
       preferredDate,
       status: 'pending'
     });
@@ -530,17 +631,46 @@ router.delete('/:id/gallery', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Get hospital doctors
-router.get('/:id/doctors', async (req, res) => {
+// Clear all images from hospital gallery
+router.delete('/:id/gallery/clear', ensureAuthenticated, async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
+    
     if (!hospital) {
       return res.status(404).json({ error: 'Hospital not found' });
     }
 
+    if (String(hospital.owner) !== String(req.user._id)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    hospital.gallery = [];
+    await hospital.save();
+
+    res.json({ gallery: hospital.gallery });
+  } catch (error) {
+    console.error('Error clearing gallery:', error);
+    res.status(500).json({ error: 'Failed to clear gallery' });
+  }
+});
+
+// Get hospital doctors
+router.get('/:id/doctors', async (req, res) => {
+  try {
+    console.log('🏥 Fetching doctors for hospital ID:', req.params.id);
+    const hospital = await Hospital.findById(req.params.id);
+    if (!hospital) {
+      console.log('❌ Hospital not found');
+      return res.status(404).json({ error: 'Hospital not found' });
+    }
+
+    console.log('🏥 Hospital found:', hospital.name);
+    console.log('🏥 Doctors in hospital:', hospital.doctors);
+    console.log('🏥 Number of doctors:', hospital.doctors ? hospital.doctors.length : 0);
+
     res.json({ doctors: hospital.doctors || [] });
   } catch (error) {
-    console.error('Error fetching doctors:', error);
+    console.error('❌ Error fetching doctors:', error);
     res.status(500).json({ error: 'Failed to fetch doctors' });
   }
 });
@@ -559,7 +689,7 @@ router.post('/:id/doctors', ensureAuthenticated, uploadWithFilter.single('image'
 
     const doctorData = {
       name: req.body.name,
-      specialization: req.body.specialization,
+      position: req.body.position,
       qualification: req.body.qualification,
       experience: req.body.experience,
       contactNumber: req.body.contactNumber,
@@ -567,8 +697,10 @@ router.post('/:id/doctors', ensureAuthenticated, uploadWithFilter.single('image'
       image: req.file ? req.file.path : undefined
     };
 
+    console.log('🏥 Adding doctor data:', doctorData);
     hospital.doctors.push(doctorData);
     await hospital.save();
+    console.log('🏥 Doctor added successfully. Total doctors now:', hospital.doctors.length);
 
     res.json({ doctors: hospital.doctors });
   } catch (error) {

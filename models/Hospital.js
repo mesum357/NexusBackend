@@ -12,7 +12,7 @@ const departmentSchema = new mongoose.Schema({
 // Doctor sub-schema for hospitals
 const doctorSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  specialization: { type: String },
+  position: { type: String },
   qualification: { type: String },
   experience: { type: String },
   image: { type: String },

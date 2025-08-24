@@ -1,0 +1,152 @@
+# MongoDB Commands to Create All Emoji Categories
+# Copy and paste these commands directly into your MongoDB database
+
+# First, delete all existing categories
+db.categories.deleteMany({})
+
+# Insert all emoji categories
+db.categories.insertMany([
+  // Food & Beverages 🍽️
+  { value: "Restaurants & Cafes", label: "Restaurants & Cafes", icon: "🍽️", section: "Food & Beverages", order: 1, isActive: true },
+  { value: "Fast Food", label: "Fast Food", icon: "🍔", section: "Food & Beverages", order: 2, isActive: true },
+  { value: "Pizza", label: "Pizza", icon: "🍕", section: "Food & Beverages", order: 3, isActive: true },
+  { value: "Coffee & Tea", label: "Coffee & Tea", icon: "☕", section: "Food & Beverages", order: 4, isActive: true },
+  { value: "Bakery & Pastries", label: "Bakery & Pastries", icon: "🥐", section: "Food & Beverages", order: 5, isActive: true },
+  { value: "Ice Cream & Desserts", label: "Ice Cream & Desserts", icon: "🍦", section: "Food & Beverages", order: 6, isActive: true },
+  { value: "Street Food", label: "Street Food", icon: "🌮", section: "Food & Beverages", order: 7, isActive: true },
+  { value: "Chinese Food", label: "Chinese Food", icon: "🥡", section: "Food & Beverages", order: 8, isActive: true },
+
+  // Fashion & Clothing 👗
+  { value: "Men's Clothing", label: "Men's Clothing", icon: "👔", section: "Fashion & Clothing", order: 1, isActive: true },
+  { value: "Women's Clothing", label: "Women's Clothing", icon: "👗", section: "Fashion & Clothing", order: 2, isActive: true },
+  { value: "Kids & Baby Clothing", label: "Kids & Baby Clothing", icon: "👶", section: "Fashion & Clothing", order: 3, isActive: true },
+  { value: "Shoes & Footwear", label: "Shoes & Footwear", icon: "👟", section: "Fashion & Clothing", order: 4, isActive: true },
+  { value: "Jewelry & Accessories", label: "Jewelry & Accessories", icon: "💎", section: "Fashion & Clothing", order: 5, isActive: true },
+  { value: "Bags & Handbags", label: "Bags & Handbags", icon: "👜", section: "Fashion & Clothing", order: 6, isActive: true },
+  { value: "Watches", label: "Watches", icon: "⌚", section: "Fashion & Clothing", order: 7, isActive: true },
+  { value: "Traditional Wear", label: "Traditional Wear", icon: "👘", section: "Fashion & Clothing", order: 8, isActive: true },
+
+  // Electronics & Technology 📱
+  { value: "Mobile Phones", label: "Mobile Phones", icon: "📱", section: "Electronics & Technology", order: 1, isActive: true },
+  { value: "Computers & Laptops", label: "Computers & Laptops", icon: "💻", section: "Electronics & Technology", order: 2, isActive: true },
+  { value: "Gaming & Consoles", label: "Gaming & Consoles", icon: "🎮", section: "Electronics & Technology", order: 3, isActive: true },
+  { value: "Audio & Speakers", label: "Audio & Speakers", icon: "🔊", section: "Electronics & Technology", order: 4, isActive: true },
+  { value: "Cameras & Photography", label: "Cameras & Photography", icon: "📷", section: "Electronics & Technology", order: 5, isActive: true },
+  { value: "TV & Home Entertainment", label: "TV & Home Entertainment", icon: "📺", section: "Electronics & Technology", order: 6, isActive: true },
+  { value: "Smart Home Devices", label: "Smart Home Devices", icon: "🏠", section: "Electronics & Technology", order: 7, isActive: true },
+  { value: "Computer Accessories", label: "Computer Accessories", icon: "🖱️", section: "Electronics & Technology", order: 8, isActive: true },
+
+  // Automotive 🚗
+  { value: "Cars & Vehicles", label: "Cars & Vehicles", icon: "🚗", section: "Automotive", order: 1, isActive: true },
+  { value: "Motorcycles", label: "Motorcycles", icon: "🏍️", section: "Automotive", order: 2, isActive: true },
+  { value: "Auto Parts", label: "Auto Parts", icon: "⚙️", section: "Automotive", order: 3, isActive: true },
+  { value: "Auto Services", label: "Auto Services", icon: "🔧", section: "Automotive", order: 4, isActive: true },
+  { value: "Car Wash", label: "Car Wash", icon: "🚿", section: "Automotive", order: 5, isActive: true },
+  { value: "Fuel Stations", label: "Fuel Stations", icon: "⛽", section: "Automotive", order: 6, isActive: true },
+  { value: "Tires & Wheels", label: "Tires & Wheels", icon: "🛞", section: "Automotive", order: 7, isActive: true },
+  { value: "Auto Accessories", label: "Auto Accessories", icon: "🚙", section: "Automotive", order: 8, isActive: true },
+
+  // Beauty & Personal Care 💄
+  { value: "Skincare", label: "Skincare", icon: "🧴", section: "Beauty & Personal Care", order: 1, isActive: true },
+  { value: "Makeup & Cosmetics", label: "Makeup & Cosmetics", icon: "💄", section: "Beauty & Personal Care", order: 2, isActive: true },
+  { value: "Hair Care", label: "Hair Care", icon: "✂️", section: "Beauty & Personal Care", order: 3, isActive: true },
+  { value: "Fragrances", label: "Fragrances", icon: "🌸", section: "Beauty & Personal Care", order: 4, isActive: true },
+  { value: "Salon Services", label: "Salon Services", icon: "💇‍♀️", section: "Beauty & Personal Care", order: 5, isActive: true },
+  { value: "Spa & Wellness", label: "Spa & Wellness", icon: "💆‍♀️", section: "Beauty & Personal Care", order: 6, isActive: true },
+  { value: "Personal Hygiene", label: "Personal Hygiene", icon: "🧼", section: "Beauty & Personal Care", order: 7, isActive: true },
+  { value: "Nail Care", label: "Nail Care", icon: "💅", section: "Beauty & Personal Care", order: 8, isActive: true },
+
+  // Sports & Outdoors ⚽
+  { value: "Sports Equipment", label: "Sports Equipment", icon: "⚽", section: "Sports & Outdoors", order: 1, isActive: true },
+  { value: "Fitness & Gym", label: "Fitness & Gym", icon: "🏋️", section: "Sports & Outdoors", order: 2, isActive: true },
+  { value: "Cricket", label: "Cricket", icon: "🏏", section: "Sports & Outdoors", order: 3, isActive: true },
+  { value: "Football", label: "Football", icon: "⚽", section: "Sports & Outdoors", order: 4, isActive: true },
+  { value: "Cycling", label: "Cycling", icon: "🚴", section: "Sports & Outdoors", order: 5, isActive: true },
+  { value: "Swimming", label: "Swimming", icon: "🏊", section: "Sports & Outdoors", order: 6, isActive: true },
+  { value: "Outdoor Recreation", label: "Outdoor Recreation", icon: "🏕️", section: "Sports & Outdoors", order: 7, isActive: true },
+  { value: "Water Sports", label: "Water Sports", icon: "🏄", section: "Sports & Outdoors", order: 8, isActive: true },
+
+  // Health & Wellness 💊
+  { value: "Pharmacy", label: "Pharmacy", icon: "💊", section: "Health & Wellness", order: 1, isActive: true },
+  { value: "Hospitals", label: "Hospitals", icon: "🏥", section: "Health & Wellness", order: 2, isActive: true },
+  { value: "Clinics", label: "Clinics", icon: "🩺", section: "Health & Wellness", order: 3, isActive: true },
+  { value: "Dental Care", label: "Dental Care", icon: "🦷", section: "Health & Wellness", order: 4, isActive: true },
+  { value: "Medical Equipment", label: "Medical Equipment", icon: "🩺", section: "Health & Wellness", order: 5, isActive: true },
+  { value: "Health Supplements", label: "Health Supplements", icon: "💊", section: "Health & Wellness", order: 6, isActive: true },
+  { value: "Fitness & Nutrition", label: "Fitness & Nutrition", icon: "🍎", section: "Health & Wellness", order: 7, isActive: true },
+  { value: "Mental Health", label: "Mental Health", icon: "🧠", section: "Health & Wellness", order: 8, isActive: true },
+
+  // Education & Training 🏫
+  { value: "Schools & Universities", label: "Schools & Universities", icon: "🏫", section: "Education & Training", order: 1, isActive: true },
+  { value: "Tutoring Services", label: "Tutoring Services", icon: "👨‍🏫", section: "Education & Training", order: 2, isActive: true },
+  { value: "Language Learning", label: "Language Learning", icon: "🗣️", section: "Education & Training", order: 3, isActive: true },
+  { value: "Online Courses", label: "Online Courses", icon: "💻", section: "Education & Training", order: 4, isActive: true },
+  { value: "Vocational Training", label: "Vocational Training", icon: "🔨", section: "Education & Training", order: 5, isActive: true },
+  { value: "Music Lessons", label: "Music Lessons", icon: "🎼", section: "Education & Training", order: 6, isActive: true },
+  { value: "Art Classes", label: "Art Classes", icon: "🎨", section: "Education & Training", order: 7, isActive: true },
+  { value: "Sports Training", label: "Sports Training", icon: "🏃", section: "Education & Training", order: 8, isActive: true },
+
+  // Professional Services ⚖️
+  { value: "Legal Services", label: "Legal Services", icon: "⚖️", section: "Professional Services", order: 1, isActive: true },
+  { value: "Real Estate", label: "Real Estate", icon: "🏢", section: "Professional Services", order: 2, isActive: true },
+  { value: "Banking & Finance", label: "Banking & Finance", icon: "🏦", section: "Professional Services", order: 3, isActive: true },
+  { value: "Insurance", label: "Insurance", icon: "🛡️", section: "Professional Services", order: 4, isActive: true },
+  { value: "Accounting & Tax", label: "Accounting & Tax", icon: "🧮", section: "Professional Services", order: 5, isActive: true },
+  { value: "Consulting", label: "Consulting", icon: "💼", section: "Professional Services", order: 6, isActive: true },
+  { value: "Marketing & Advertising", label: "Marketing & Advertising", icon: "📢", section: "Professional Services", order: 7, isActive: true },
+  { value: "IT & Software", label: "IT & Software", icon: "💻", section: "Professional Services", order: 8, isActive: true },
+
+  // Entertainment 🎭
+  { value: "Cinemas & Theaters", label: "Cinemas & Theaters", icon: "🎭", section: "Entertainment", order: 1, isActive: true },
+  { value: "Gaming Centers", label: "Gaming Centers", icon: "🎮", section: "Entertainment", order: 2, isActive: true },
+  { value: "Amusement Parks", label: "Amusement Parks", icon: "🎢", section: "Entertainment", order: 3, isActive: true },
+  { value: "Event Planning", label: "Event Planning", icon: "🎉", section: "Entertainment", order: 4, isActive: true },
+  { value: "Photography Services", label: "Photography Services", icon: "📸", section: "Entertainment", order: 5, isActive: true },
+  { value: "DJ & Music", label: "DJ & Music", icon: "🎧", section: "Entertainment", order: 6, isActive: true },
+  { value: "Party Supplies", label: "Party Supplies", icon: "🎂", section: "Entertainment", order: 7, isActive: true },
+  { value: "Karaoke", label: "Karaoke", icon: "🎤", section: "Entertainment", order: 8, isActive: true },
+
+  // Travel & Tourism ✈️
+  { value: "Hotels & Accommodation", label: "Hotels & Accommodation", icon: "🏨", section: "Travel & Tourism", order: 1, isActive: true },
+  { value: "Travel Agencies", label: "Travel Agencies", icon: "✈️", section: "Travel & Tourism", order: 2, isActive: true },
+  { value: "Tourist Attractions", label: "Tourist Attractions", icon: "🗺️", section: "Travel & Tourism", order: 3, isActive: true },
+  { value: "Transportation", label: "Transportation", icon: "🚌", section: "Travel & Tourism", order: 4, isActive: true },
+  { value: "Car Rental", label: "Car Rental", icon: "🚗", section: "Travel & Tourism", order: 5, isActive: true },
+  { value: "Tour Guides", label: "Tour Guides", icon: "👥", section: "Travel & Tourism", order: 6, isActive: true },
+  { value: "Adventure Tours", label: "Adventure Tours", icon: "🏔️", section: "Travel & Tourism", order: 7, isActive: true },
+  { value: "Cultural Tours", label: "Cultural Tours", icon: "🏛️", section: "Travel & Tourism", order: 8, isActive: true },
+
+  // Religious & Cultural 🕌
+  { value: "Religious Items", label: "Religious Items", icon: "🙏", section: "Religious & Cultural", order: 1, isActive: true },
+  { value: "Islamic Centers", label: "Islamic Centers", icon: "🕌", section: "Religious & Cultural", order: 2, isActive: true },
+  { value: "Cultural Events", label: "Cultural Events", icon: "🎭", section: "Religious & Cultural", order: 3, isActive: true },
+  { value: "Traditional Crafts", label: "Traditional Crafts", icon: "🏺", section: "Religious & Cultural", order: 4, isActive: true },
+  { value: "Religious Services", label: "Religious Services", icon: "🙏", section: "Religious & Cultural", order: 5, isActive: true },
+  { value: "Cultural Workshops", label: "Cultural Workshops", icon: "🎨", section: "Religious & Cultural", order: 6, isActive: true },
+  { value: "Festival Supplies", label: "Festival Supplies", icon: "🎊", section: "Religious & Cultural", order: 7, isActive: true },
+  { value: "Traditional Clothing", label: "Traditional Clothing", icon: "👘", section: "Religious & Cultural", order: 8, isActive: true },
+
+  // Miscellaneous 🎁
+  { value: "Gift Shops", label: "Gift Shops", icon: "🎁", section: "Miscellaneous", order: 1, isActive: true },
+  { value: "Thrift Stores", label: "Thrift Stores", icon: "🛒", section: "Miscellaneous", order: 2, isActive: true },
+  { value: "Repair Services", label: "Repair Services", icon: "🔧", section: "Miscellaneous", order: 3, isActive: true },
+  { value: "Cleaning Services", label: "Cleaning Services", icon: "🧹", section: "Miscellaneous", order: 4, isActive: true },
+  { value: "Security Services", label: "Security Services", icon: "🔒", section: "Miscellaneous", order: 5, isActive: true },
+  { value: "Printing & Copying", label: "Printing & Copying", icon: "🖨️", section: "Miscellaneous", order: 6, isActive: true },
+  { value: "Other", label: "Other", icon: "📝", section: "Miscellaneous", order: 7, isActive: true }
+])
+
+# Verify the categories were created
+print("✅ Categories created successfully!")
+print("📊 Total categories: " + db.categories.countDocuments())
+
+# Show sample categories
+print("\n🎨 Sample categories created:")
+db.categories.find().limit(10).forEach(function(cat) {
+  print("   " + cat.icon + " " + cat.label + " (" + cat.section + ")")
+})
+
+
+
+
+
