@@ -13,6 +13,8 @@ const patientApplicationSchema = new mongoose.Schema({
   treatmentType: { type: String, required: true },
   preferredDate: { type: Date },
   status: { type: String, enum: ['pending', 'approved', 'rejected', 'completed'], default: 'pending' },
+  patientDecision: { type: String, enum: ['accepted', 'declined', 'none'], default: 'none' },
+  patientDecisionAt: { type: Date },
   notes: { type: String }, // Admin notes for approval/rejection
 }, { timestamps: true });
 

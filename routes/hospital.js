@@ -526,6 +526,32 @@ router.get('/patient/applications', ensureAuthenticated, async (req, res) => {
   }
 });
 
+// Patient: accept/decline their own application
+router.put('/patient/applications/:applicationId/decision', ensureAuthenticated, async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+    const { decision } = req.body; // 'accepted' | 'declined'
+
+    if (!['accepted', 'declined'].includes(decision)) {
+      return res.status(400).json({ error: 'Invalid decision' });
+    }
+
+    const application = await PatientApplication.findOne({ _id: applicationId, patient: req.user._id });
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    application.patientDecision = decision;
+    application.patientDecisionAt = new Date();
+    await application.save();
+
+    res.json({ application });
+  } catch (error) {
+    console.error('Error updating patient decision:', error);
+    res.status(500).json({ error: 'Failed to update decision' });
+  }
+});
+
 // Get hospital reviews
 router.get('/:id/reviews', async (req, res) => {
   try {
@@ -834,11 +860,15 @@ router.post('/:id/tasks', ensureAuthenticated, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
+    // Normalize date (YYYY-MM-DD) – required by model
+    const normalizedDate = req.body.date || new Date().toISOString().split('T')[0];
+
     const task = new InstituteTask({
       institute: req.params.id,
       title: req.body.title,
       description: req.body.description,
-      type: req.body.type
+      type: req.body.type,
+      date: normalizedDate
     });
 
     await task.save();
@@ -938,9 +968,10 @@ router.get('/tasks/my/today', ensureAuthenticated, async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const tasks = await InstituteTask.find({
-      createdAt: { $gte: today, $lt: tomorrow }
-    }).populate('institute', 'name');
+    // Ideally filter by institutes of hospitals where the user has approved applications
+    // For now, return today's tasks across hospitals (frontend shows hospitalName)
+    const tasks = await InstituteTask.find({ createdAt: { $gte: today, $lt: tomorrow } })
+      .populate('institute', 'name');
 
     res.json({ tasks });
   } catch (error) {

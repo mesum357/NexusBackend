@@ -521,6 +521,42 @@ router.put('/payment-request/:id/status', async (req, res) => {
       }
     }
 
+    // If payment is verified, automatically approve the associated product (marketplace)
+    if (status === 'verified' && (paymentRequest.entityType === 'marketplace' || paymentRequest.entityType === 'product')) {
+      try {
+        let product = null;
+        if (paymentRequest.agentId) {
+          console.log(`🔍 Looking for product with agentId: ${paymentRequest.agentId}`);
+          product = await Product.findOne({ agentId: paymentRequest.agentId });
+        }
+
+        if (!product && paymentRequest.entityId) {
+          console.log(`🔍 Trying to find product by entityId: ${paymentRequest.entityId}`);
+          product = await Product.findById(paymentRequest.entityId);
+        }
+
+        if (product) {
+          console.log(`✅ Found product: ${product.title} (ID: ${product._id})`);
+          console.log(`📝 Current approval status: ${product.approvalStatus}`);
+          product.approvalStatus = 'approved';
+          product.approvalNotes = 'Payment verified - automatically approved';
+          product.approvedBy = null;
+          product.approvedAt = new Date();
+          await product.save();
+          console.log(`✅ Product "${product.title}" automatically approved after payment verification`);
+          console.log(`📝 New approval status: ${product.approvalStatus}`);
+        } else {
+          console.log('⚠️ No product found to auto-approve for this payment');
+        }
+      } catch (productUpdateError) {
+        console.error('❌ Error updating product approval status:', productUpdateError);
+        console.error('Product update error details:', {
+          message: productUpdateError.message,
+          stack: productUpdateError.stack
+        });
+      }
+    }
+
     res.json({ 
       success: true, 
       message: `Payment request ${status} successfully`,
