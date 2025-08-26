@@ -356,204 +356,122 @@ router.put('/payment-request/:id/status', async (req, res) => {
 
     await paymentRequest.save();
 
-    // If payment is verified, automatically approve the associated shop
-    if (status === 'verified' && paymentRequest.entityType === 'shop' && paymentRequest.agentId) {
+    // If payment is verified, automatically approve the associated entity
+    if (status === 'verified') {
       try {
-        console.log(`🔍 Looking for shop with agentId: ${paymentRequest.agentId}`);
+        let entity = null;
+        let entityType = paymentRequest.entityType;
         
-        // Find the shop by agentId
-        const shop = await Shop.findOne({ agentId: paymentRequest.agentId });
-        
-        if (shop) {
-          console.log(`✅ Found shop: ${shop.shopName} (ID: ${shop._id})`);
-          console.log(`📝 Current approval status: ${shop.approvalStatus}`);
-          
-          // Update shop approval status
-          shop.approvalStatus = 'approved';
-          shop.approvalNotes = 'Payment verified - automatically approved';
-          shop.approvedBy = null; // No authentication required
-          shop.approvedAt = new Date();
-          
-          await shop.save();
-          
-          console.log(`✅ Shop "${shop.shopName}" automatically approved after payment verification`);
-          console.log(`📝 New approval status: ${shop.approvalStatus}`);
-        } else {
-          console.log(`⚠️ No shop found with agentId: ${paymentRequest.agentId}`);
-          
-          // Try to find by entityId if available
-          if (paymentRequest.entityId) {
-            console.log(`🔍 Trying to find shop by entityId: ${paymentRequest.entityId}`);
-            const shopById = await Shop.findById(paymentRequest.entityId);
-            
-            if (shopById) {
-              console.log(`✅ Found shop by ID: ${shopById.shopName} (ID: ${shopById._id})`);
-              console.log(`📝 Current approval status: ${shopById.approvalStatus}`);
-              
-              // Update shop approval status
-              shopById.approvalStatus = 'approved';
-              shopById.approvalNotes = 'Payment verified - automatically approved';
-              shopById.approvedBy = null;
-              shopById.approvedAt = new Date();
-              
-              await shopById.save();
-              
-              console.log(`✅ Shop "${shopById.shopName}" automatically approved after payment verification`);
-              console.log(`📝 New approval status: ${shopById.approvalStatus}`);
-            } else {
-              console.log(`⚠️ No shop found with entityId: ${paymentRequest.entityId}`);
-            }
-          }
-        }
-      } catch (shopUpdateError) {
-        console.error('❌ Error updating shop approval status:', shopUpdateError);
-        // Don't fail the payment verification if shop update fails
-        console.error('Shop update error details:', {
-          message: shopUpdateError.message,
-          stack: shopUpdateError.stack
-        });
-      }
-    }
-
-    // If payment is verified, automatically approve the associated institute
-    if (status === 'verified' && paymentRequest.entityType === 'institute' && paymentRequest.agentId) {
-      try {
-        console.log(`🔍 Looking for institute with agentId: ${paymentRequest.agentId}`);
-        
-        // Find the institute by agentId
-        const institute = await Institute.findOne({ agentId: paymentRequest.agentId });
-        
-        if (institute) {
-          console.log(`✅ Found institute: ${institute.instituteName} (ID: ${institute._id})`);
-          console.log(`📝 Current approval status: ${institute.approvalStatus}`);
-          
-          // Update institute approval status
-          institute.approvalStatus = 'approved';
-          institute.approvalNotes = 'Payment verified - automatically approved';
-          institute.approvedBy = null;
-          institute.approvedAt = new Date();
-          institute.verified = true;
-          
-          await institute.save();
-          
-          console.log(`✅ Institute "${institute.instituteName}" automatically approved after payment verification`);
-          console.log(`📝 New approval status: ${institute.approvalStatus}`);
-        } else if (paymentRequest.entityId) {
-          console.log(`🔍 Trying to find institute by entityId: ${paymentRequest.entityId}`);
-          const instituteById = await Institute.findById(paymentRequest.entityId);
-          
-          if (instituteById) {
-            console.log(`✅ Found institute by ID: ${instituteById.instituteName} (ID: ${instituteById._id})`);
-            console.log(`📝 Current approval status: ${instituteById.approvalStatus}`);
-            
-            // Update institute approval status
-            instituteById.approvalStatus = 'approved';
-            instituteById.approvalNotes = 'Payment verified - automatically approved';
-            instituteById.approvedBy = null;
-            instituteById.approvedAt = new Date();
-            instituteById.verified = true;
-            
-            await instituteById.save();
-            
-            console.log(`✅ Institute "${instituteById.instituteName}" automatically approved after payment verification`);
-            console.log(`📝 New approval status: ${instituteById.approvalStatus}`);
-          }
-        }
-      } catch (instituteUpdateError) {
-        console.error('❌ Error updating institute approval status:', instituteUpdateError);
-        console.error('Institute update error details:', {
-          message: instituteUpdateError.message,
-          stack: instituteUpdateError.stack
-        });
-      }
-    }
-
-    // If payment is verified, automatically approve the associated hospital
-    if (status === 'verified' && paymentRequest.entityType === 'hospital' && paymentRequest.agentId) {
-      try {
-        console.log(`🔍 Looking for hospital with agentId: ${paymentRequest.agentId}`);
-        
-        // Find the hospital by agentId
-        const hospital = await Hospital.findOne({ agentId: paymentRequest.agentId });
-        
-        if (hospital) {
-          console.log(`✅ Found hospital: ${hospital.hospitalName} (ID: ${hospital._id})`);
-          console.log(`📝 Current approval status: ${hospital.approvalStatus}`);
-          
-          // Update hospital approval status
-          hospital.approvalStatus = 'approved';
-          hospital.approvalNotes = 'Payment verified - automatically approved';
-          hospital.approvedBy = null;
-          hospital.approvedAt = new Date();
-          hospital.verified = true;
-          
-          await hospital.save();
-          
-          console.log(`✅ Hospital "${hospital.hospitalName}" automatically approved after payment verification`);
-          console.log(`📝 New approval status: ${hospital.approvalStatus}`);
-        } else if (paymentRequest.entityId) {
-          console.log(`🔍 Trying to find hospital by entityId: ${paymentRequest.entityId}`);
-          const hospitalById = await Hospital.findById(paymentRequest.entityId);
-          
-          if (hospitalById) {
-            console.log(`✅ Found hospital by ID: ${hospitalById.hospitalName} (ID: ${hospitalById._id})`);
-            console.log(`📝 Current approval status: ${hospitalById.approvalStatus}`);
-            
-            // Update hospital approval status
-            hospitalById.approvalStatus = 'approved';
-            hospitalById.approvalNotes = 'Payment verified - automatically approved';
-            hospitalById.approvedBy = null;
-            hospitalById.approvedAt = new Date();
-            hospitalById.verified = true;
-            
-            await hospitalById.save();
-            
-            console.log(`✅ Hospital "${hospitalById.hospitalName}" automatically approved after payment verification`);
-            console.log(`📝 New approval status: ${hospitalById.approvalStatus}`);
-          }
-        }
-      } catch (hospitalUpdateError) {
-        console.error('❌ Error updating hospital approval status:', hospitalUpdateError);
-        console.error('Hospital update error details:', {
-          message: hospitalUpdateError.message,
-          stack: hospitalUpdateError.stack
-        });
-      }
-    }
-
-    // If payment is verified, automatically approve the associated product (marketplace)
-    if (status === 'verified' && (paymentRequest.entityType === 'marketplace' || paymentRequest.entityType === 'product')) {
-      try {
-        let product = null;
+        // First try to find entity by agentId if available
         if (paymentRequest.agentId) {
-          console.log(`🔍 Looking for product with agentId: ${paymentRequest.agentId}`);
-          product = await Product.findOne({ agentId: paymentRequest.agentId });
+          console.log(`🔍 Looking for ${entityType} with agentId: ${paymentRequest.agentId}`);
+          
+          switch (entityType) {
+            case 'shop':
+              entity = await Shop.findOne({ agentId: paymentRequest.agentId });
+              break;
+            case 'institute':
+              entity = await Institute.findOne({ agentId: paymentRequest.agentId });
+              break;
+            case 'hospital':
+              entity = await Hospital.findOne({ agentId: paymentRequest.agentId });
+              break;
+            case 'marketplace':
+            case 'product':
+              entity = await Product.findOne({ agentId: paymentRequest.agentId });
+              break;
+          }
+          
+          if (entity) {
+            console.log(`✅ Found ${entityType} by agentId: ${entity.name || entity.shopName || entity.hospitalName || entity.title} (ID: ${entity._id})`);
+          }
         }
-
-        if (!product && paymentRequest.entityId) {
-          console.log(`🔍 Trying to find product by entityId: ${paymentRequest.entityId}`);
-          product = await Product.findById(paymentRequest.entityId);
+        
+        // If entity not found by agentId, try to find by entityId
+        if (!entity && paymentRequest.entityId) {
+          console.log(`🔍 Trying to find ${entityType} by entityId: ${paymentRequest.entityId}`);
+          
+          switch (entityType) {
+            case 'shop':
+              entity = await Shop.findById(paymentRequest.entityId);
+              break;
+            case 'institute':
+              entity = await Institute.findById(paymentRequest.entityId);
+              break;
+            case 'hospital':
+              entity = await Hospital.findById(paymentRequest.entityId);
+              break;
+            case 'marketplace':
+            case 'product':
+              entity = await Product.findById(paymentRequest.entityId);
+              break;
+          }
+          
+          if (entity) {
+            console.log(`✅ Found ${entityType} by entityId: ${entity.name || entity.shopName || entity.hospitalName || entity.title} (ID: ${entity._id})`);
+          }
         }
-
-        if (product) {
-          console.log(`✅ Found product: ${product.title} (ID: ${product._id})`);
-          console.log(`📝 Current approval status: ${product.approvalStatus}`);
-          product.approvalStatus = 'approved';
-          product.approvalNotes = 'Payment verified - automatically approved';
-          product.approvedBy = null;
-          product.approvedAt = new Date();
-          await product.save();
-          console.log(`✅ Product "${product.title}" automatically approved after payment verification`);
-          console.log(`📝 New approval status: ${product.approvalStatus}`);
+        
+        // If still no entity found, try to find by user and entityType (for cases where neither agentId nor entityId is available)
+        if (!entity) {
+          console.log(`🔍 Trying to find ${entityType} by user: ${paymentRequest.user} and entityType: ${entityType}`);
+          
+          switch (entityType) {
+            case 'shop':
+              entity = await Shop.findOne({ owner: paymentRequest.user, approvalStatus: 'pending' });
+              break;
+            case 'institute':
+              entity = await Institute.findOne({ owner: paymentRequest.user, approvalStatus: 'pending' });
+              break;
+            case 'hospital':
+              entity = await Hospital.findOne({ owner: paymentRequest.user, approvalStatus: 'pending' });
+              break;
+            case 'marketplace':
+            case 'product':
+              entity = await Product.findOne({ owner: paymentRequest.user, approvalStatus: 'pending' });
+              break;
+          }
+          
+          if (entity) {
+            console.log(`✅ Found ${entityType} by user: ${entity.name || entity.shopName || entity.hospitalName || entity.title} (ID: ${entity._id})`);
+          }
+        }
+        
+        // If entity is found, approve it
+        if (entity) {
+          console.log(`📝 Current approval status: ${entity.approvalStatus}`);
+          
+          // Update entity approval status
+          entity.approvalStatus = 'approved';
+          entity.approvalNotes = 'Payment verified - automatically approved';
+          entity.approvedBy = null; // No authentication required
+          entity.approvedAt = new Date();
+          
+          // Set verified field for entities that have it
+          if (entity.verified !== undefined) {
+            entity.verified = true;
+          }
+          
+          await entity.save();
+          
+          const entityName = entity.name || entity.shopName || entity.hospitalName || entity.title;
+          console.log(`✅ ${entityType} "${entityName}" automatically approved after payment verification`);
+          console.log(`📝 New approval status: ${entity.approvalStatus}`);
         } else {
-          console.log('⚠️ No product found to auto-approve for this payment');
+          console.log(`⚠️ No ${entityType} found to auto-approve for this payment request`);
+          console.log(`   - Payment Request ID: ${paymentRequest._id}`);
+          console.log(`   - Entity Type: ${paymentRequest.entityType}`);
+          console.log(`   - Agent ID: ${paymentRequest.agentId || 'Not provided'}`);
+          console.log(`   - Entity ID: ${paymentRequest.entityId || 'Not provided'}`);
+          console.log(`   - User: ${paymentRequest.user}`);
         }
-      } catch (productUpdateError) {
-        console.error('❌ Error updating product approval status:', productUpdateError);
-        console.error('Product update error details:', {
-          message: productUpdateError.message,
-          stack: productUpdateError.stack
+      } catch (entityUpdateError) {
+        console.error(`❌ Error updating ${paymentRequest.entityType} approval status:`, entityUpdateError);
+        console.error('Entity update error details:', {
+          message: entityUpdateError.message,
+          stack: entityUpdateError.stack
         });
+        // Don't fail the payment verification if entity update fails
       }
     }
 
