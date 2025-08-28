@@ -73,9 +73,9 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
     }
 
     // Use provided image URLs or fallback to default images
-    const shopLogoPath = req.body.shopLogo || 'https://picsum.photos/200/200?random=1';
-    const shopBannerPath = req.body.shopBanner || 'https://picsum.photos/800/400?random=2';
-    const ownerProfilePath = req.body.ownerProfilePhoto || 'https://picsum.photos/100/100?random=3';
+    const shopLogoPath = req.body.shopLogo || 'https://via.placeholder.com/200x200/cccccc/666666?text=Shop+Logo';
+    const shopBannerPath = req.body.shopBanner || 'https://via.placeholder.com/800x400/cccccc/666666?text=Shop+Banner';
+    const ownerProfilePath = req.body.ownerProfilePhoto || 'https://via.placeholder.com/100x100/cccccc/666666?text=Profile';
 
     console.log('🖼️ Image data received:');
     console.log('   - shopLogo:', req.body.shopLogo);
@@ -102,8 +102,8 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
           finalImage = product.imagePreview; // Fallback to single imagePreview
           console.log(`📦 Product "${product.name}" using imagePreview:`, finalImage);
         } else {
-          finalImage = 'https://picsum.photos/150/150?random=4'; // Default placeholder
-          console.log(`📦 Product "${product.name}" using default placeholder`);
+          finalImage = 'https://via.placeholder.com/300x200/cccccc/666666?text=No+Image'; // Generic placeholder
+          console.log(`📦 Product "${product.name}" using generic placeholder`);
         }
       }
       
@@ -264,13 +264,13 @@ router.post('/create', ensureAuthenticated, upload.fields([
 
     // Set default images if none provided
     if (!shopLogoPath) {
-      shopLogoPath = 'https://picsum.photos/200/200?random=1';
+      shopLogoPath = 'https://via.placeholder.com/200x200/cccccc/666666?text=Shop+Logo';
     }
     if (!shopBannerPath) {
-      shopBannerPath = 'https://picsum.photos/800/400?random=2';
+      shopBannerPath = 'https://via.placeholder.com/800x400/cccccc/666666?text=Shop+Banner';
     }
     if (!ownerProfilePath) {
-      ownerProfilePath = 'https://picsum.photos/100/100?random=3';
+      ownerProfilePath = 'https://via.placeholder.com/100x100/cccccc/666666?text=Profile';
     }
 
     // Process product images
@@ -347,9 +347,9 @@ router.post('/test-products', ensureAuthenticated, async (req, res) => {
       shopType: 'Product Seller',
       shopDescription: 'Test shop for debugging products',
       categories: ['Electronics'],
-      shopLogo: 'https://picsum.photos/200/200?random=1',
-      shopBanner: 'https://picsum.photos/800/400?random=2',
-      ownerProfilePhoto: 'https://picsum.photos/100/100?random=3',
+      shopLogo: 'https://via.placeholder.com/200x200/cccccc/666666?text=Shop+Logo',
+      shopBanner: 'https://via.placeholder.com/800x400/cccccc/666666?text=Shop+Banner',
+      ownerProfilePhoto: 'https://via.placeholder.com/100x100/cccccc/666666?text=Profile',
       websiteUrl: '',
       facebookUrl: '',
       instagramHandle: '',
@@ -362,7 +362,7 @@ router.post('/test-products', ensureAuthenticated, async (req, res) => {
           price: 100,
           discountPercentage: 10,
           category: 'Electronics',
-          image: 'https://picsum.photos/150/150?random=5'
+          image: 'https://via.placeholder.com/300x200/cccccc/666666?text=Test+Product+1'
         },
         {
           id: 'test-2',
@@ -371,14 +371,14 @@ router.post('/test-products', ensureAuthenticated, async (req, res) => {
           price: 200,
           discountPercentage: 20,
           category: 'Electronics',
-          image: 'https://picsum.photos/150/150?random=6'
+          image: 'https://via.placeholder.com/300x200/cccccc/666666?text=Test+Product+2'
         }
       ],
       rating: 4.5,
       totalReviews: 0,
       owner: req.user._id,
       ownerName: req.user.username || req.user.email || '',
-      ownerDp: 'https://picsum.photos/100/100?random=3',
+      ownerDp: 'https://via.placeholder.com/100x100/cccccc/666666?text=Profile',
       agentId: 'test-agent',
       approvalStatus: 'pending'
     };

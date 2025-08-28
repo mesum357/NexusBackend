@@ -45,9 +45,9 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
     } = req.body;
 
     // Set default images if none provided
-    const shopLogo = req.file ? req.file.path : 'https://picsum.photos/200/200?random=1';
-    const ownerDp = req.user.profileImage || 'https://picsum.photos/100/100?random=3';
-    const shopBanner = 'https://picsum.photos/800/400?random=2';
+    const shopLogo = req.file ? req.file.path : 'https://via.placeholder.com/200x200/cccccc/666666?text=Shop+Logo';
+    const ownerDp = req.user.profileImage || 'https://via.placeholder.com/100x100/cccccc/666666?text=Profile';
+    const shopBanner = 'https://via.placeholder.com/800x400/cccccc/666666?text=Shop+Banner';
 
     const shop = new Shop({
       shopName,
@@ -111,30 +111,42 @@ router.get('/all', async (req, res) => {
           console.log(`     - imagePreviews: ${processedProduct.imagePreviews ? JSON.stringify(processedProduct.imagePreviews) : 'NOT SET'}`);
           console.log(`     - imagePreview: ${processedProduct.imagePreview || 'NOT SET'}`);
           
-          // If product has no image field or empty image, check for alternatives
-          if (!processedProduct.image || processedProduct.image === '') {
+          // Check if the current image is a valid Cloudinary URL
+          const hasValidCloudinaryImage = processedProduct.image && 
+            processedProduct.image.startsWith('https://res.cloudinary.com') && 
+            processedProduct.image !== '';
+          
+          if (hasValidCloudinaryImage) {
+            console.log(`     - ✅ Valid Cloudinary image: ${processedProduct.image}`);
+          } else if (!processedProduct.image || processedProduct.image === '') {
             // Check if there's an imagePreviews array (from new data)
             if (processedProduct.imagePreviews && Array.isArray(processedProduct.imagePreviews) && processedProduct.imagePreviews.length > 0) {
-              processedProduct.image = processedProduct.imagePreviews[0];
-              console.log(`     - ✅ Using imagePreviews[0]: ${processedProduct.image}`);
+              const firstImage = processedProduct.imagePreviews[0];
+              // Only use if it's a valid Cloudinary URL
+              if (firstImage && firstImage.startsWith('https://res.cloudinary.com')) {
+                processedProduct.image = firstImage;
+                console.log(`     - ✅ Using imagePreviews[0] (Cloudinary): ${processedProduct.image}`);
+              } else {
+                console.log(`     - ⚠️ imagePreviews[0] is not a valid Cloudinary URL: ${firstImage}`);
+              }
             }
             // Check if there's an imagePreview field (from old data)
             else if (processedProduct.imagePreview && processedProduct.imagePreview !== '') {
-              processedProduct.image = processedProduct.imagePreview;
-              console.log(`     - ✅ Using imagePreview: ${processedProduct.image}`);
-            } else {
-              // Use placeholder if no image is available
-              processedProduct.image = 'https://picsum.photos/150/150?random=4';
-              console.log(`     - ⚠️ Using placeholder image: ${processedProduct.image}`);
+              // Only use if it's a valid Cloudinary URL
+              if (processedProduct.imagePreview.startsWith('https://res.cloudinary.com')) {
+                processedProduct.image = processedProduct.imagePreview;
+                console.log(`     - ✅ Using imagePreview (Cloudinary): ${processedProduct.image}`);
+              } else {
+                console.log(`     - ⚠️ imagePreview is not a valid Cloudinary URL: ${processedProduct.imagePreview}`);
+              }
             }
-          } else {
-            console.log(`     - ✅ Image already set: ${processedProduct.image}`);
           }
           
-          // Ensure the image field is not undefined or null
-          if (!processedProduct.image) {
-            processedProduct.image = 'https://picsum.photos/150/150?random=4';
-            console.log(`     - 🔄 Final fallback to placeholder: ${processedProduct.image}`);
+          // Only use placeholder if we still don't have a valid image
+          if (!processedProduct.image || !processedProduct.image.startsWith('https://res.cloudinary.com')) {
+            // Use a more generic placeholder that indicates no image
+            processedProduct.image = 'https://via.placeholder.com/300x200/cccccc/666666?text=No+Image';
+            console.log(`     - 🔄 Using generic placeholder (no valid Cloudinary image found)`);
           }
           
           console.log(`     - Final image: ${processedProduct.image}`);
@@ -273,30 +285,65 @@ router.get('/:shopId', async (req, res) => {
     
     // Process products to ensure image field is properly populated
     if (shop.products && shop.products.length > 0) {
-      shop.products = shop.products.map(product => {
-        // Create a new product object to avoid modifying the original
-        const processedProduct = { ...product };
+      console.log(`🖼️ Processing products for individual shop "${shop.shopName}" (${shop.products.length} products)`);
+      console.log(`🖼️ Raw products data:`, JSON.stringify(shop.products, null, 2));
+      
+      shop.products = shop.products.map((product, index) => {
+        console.log(`\n🔍 Processing product ${index + 1}:`, product);
+        console.log(`🔍 Product type:`, typeof product);
+        console.log(`🔍 Product keys:`, Object.keys(product));
+        // Extract the actual product data from Mongoose document
+        const productData = product._doc || product.toObject ? product.toObject() : product;
+        console.log(`🔍 Extracted product data:`, productData);
         
-        // If product has no image field or empty image, check for alternatives
-        if (!processedProduct.image || processedProduct.image === '') {
+        // Create a new product object to avoid modifying the original
+        const processedProduct = { ...productData };
+        
+        console.log(`   📦 Product ${index + 1} "${processedProduct.name}":`);
+        console.log(`     - Original image: ${processedProduct.image || 'NOT SET'}`);
+        console.log(`     - imagePreviews: ${processedProduct.imagePreviews ? JSON.stringify(processedProduct.imagePreviews) : 'NOT SET'}`);
+        console.log(`     - imagePreview: ${processedProduct.imagePreview || 'NOT SET'}`);
+        
+        // Check if the current image is a valid Cloudinary URL
+        const hasValidCloudinaryImage = processedProduct.image && 
+          processedProduct.image.startsWith('https://res.cloudinary.com') && 
+          processedProduct.image !== '';
+        
+        if (hasValidCloudinaryImage) {
+          console.log(`     - ✅ Valid Cloudinary image: ${processedProduct.image}`);
+        } else if (!processedProduct.image || processedProduct.image === '') {
           // Check if there's an imagePreviews array (from new data)
           if (processedProduct.imagePreviews && Array.isArray(processedProduct.imagePreviews) && processedProduct.imagePreviews.length > 0) {
-            processedProduct.image = processedProduct.imagePreviews[0];
+            const firstImage = processedProduct.imagePreviews[0];
+            // Only use if it's a valid Cloudinary URL
+            if (firstImage && firstImage.startsWith('https://res.cloudinary.com')) {
+              processedProduct.image = firstImage;
+              console.log(`     - ✅ Using imagePreviews[0] (Cloudinary): ${processedProduct.image}`);
+            } else {
+              console.log(`     - ⚠️ imagePreviews[0] is not a valid Cloudinary URL: ${firstImage}`);
+            }
           }
           // Check if there's an imagePreview field (from old data)
           else if (processedProduct.imagePreview && processedProduct.imagePreview !== '') {
-            processedProduct.image = processedProduct.imagePreview;
-          } else {
-            // Use placeholder if no image is available
-            processedProduct.image = 'https://picsum.photos/150/150?random=4';
+            // Only use if it's a valid Cloudinary URL
+            if (processedProduct.imagePreview.startsWith('https://res.cloudinary.com')) {
+              processedProduct.image = processedProduct.imagePreview;
+              console.log(`     - ✅ Using imagePreview (Cloudinary): ${processedProduct.image}`);
+            } else {
+              console.log(`     - ⚠️ imagePreview is not a valid Cloudinary URL: ${processedProduct.imagePreview}`);
+            }
           }
         }
         
-        // Ensure the image field is not undefined or null
-        if (!processedProduct.image) {
-          processedProduct.image = 'https://picsum.photos/150/150?random=4';
+        // Only use placeholder if we still don't have a valid image
+        if (!processedProduct.image || !processedProduct.image.startsWith('https://res.cloudinary.com')) {
+          // Use a more generic placeholder that indicates no image
+          processedProduct.image = 'https://via.placeholder.com/300x200/cccccc/666666?text=No+Image';
+          console.log(`     - 🔄 Using generic placeholder (no valid Cloudinary image found)`);
         }
         
+        console.log(`     - Final image: ${processedProduct.image}`);
+        console.log(`     - Final processed product:`, processedProduct);
         return processedProduct;
       });
     }
@@ -532,14 +579,14 @@ router.post('/:id/add-product', ensureAuthenticated, upload.single('productImage
     // Generate a unique ID for the product (matching wizard flow)
     const productId = Date.now().toString();
     
-    // Process the image - use Cloudinary URL if uploaded, otherwise placeholder
-    let productImage = 'https://picsum.photos/150/150?random=4'; // Default placeholder
+    // Process the image - use Cloudinary URL if uploaded, otherwise use generic placeholder
+    let productImage = 'https://via.placeholder.com/300x200/cccccc/666666?text=No+Image'; // Generic placeholder
     
     if (req.file && req.file.path) {
       productImage = req.file.path; // Cloudinary URL
       console.log('📦 Using uploaded image:', productImage);
     } else {
-      console.log('📦 No image uploaded, using placeholder:', productImage);
+      console.log('📦 No image uploaded, using generic placeholder:', productImage);
     }
     
     const product = {
