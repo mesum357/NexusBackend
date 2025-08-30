@@ -134,9 +134,9 @@ router.get('/all', async (req, res) => {
             else if (processedProduct.imagePreview && processedProduct.imagePreview !== '') {
               // Only use if it's a valid Cloudinary URL
               if (processedProduct.imagePreview.startsWith('https://res.cloudinary.com')) {
-                processedProduct.image = processedProduct.imagePreview;
+              processedProduct.image = processedProduct.imagePreview;
                 console.log(`     - ✅ Using imagePreview (Cloudinary): ${processedProduct.image}`);
-              } else {
+            } else {
                 console.log(`     - ⚠️ imagePreview is not a valid Cloudinary URL: ${processedProduct.imagePreview}`);
               }
             }
@@ -327,9 +327,9 @@ router.get('/:shopId', async (req, res) => {
           else if (processedProduct.imagePreview && processedProduct.imagePreview !== '') {
             // Only use if it's a valid Cloudinary URL
             if (processedProduct.imagePreview.startsWith('https://res.cloudinary.com')) {
-              processedProduct.image = processedProduct.imagePreview;
+            processedProduct.image = processedProduct.imagePreview;
               console.log(`     - ✅ Using imagePreview (Cloudinary): ${processedProduct.image}`);
-            } else {
+          } else {
               console.log(`     - ⚠️ imagePreview is not a valid Cloudinary URL: ${processedProduct.imagePreview}`);
             }
           }
