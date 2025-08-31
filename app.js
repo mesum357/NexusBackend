@@ -378,15 +378,47 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
             }
             return res.status(400).json({ error: errorMessage });
         }
-        // Send verification email
-        const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: user.username,
-            subject: 'Verify your email for Smart Travel',
-            html: `<h2>Welcome, ${user.fullName || user.username}!</h2><p>Please verify your email by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`
-        });
-        return res.status(201).json({ success: true, message: 'Registration successful! Please check your email to verify your account.' });
+        
+        try {
+            // Send verification email
+            const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
+            
+            // Check if email configuration exists
+            if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: user.email,
+                    subject: 'Verify your email for Pakistan Online',
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #2563eb;">Welcome to Pakistan Online, ${user.fullName}!</h2>
+                            <p>Thank you for registering with Pakistan Online. Please verify your email address by clicking the button below:</p>
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Email Address</a>
+                            </div>
+                            <p>Or copy and paste this link in your browser:</p>
+                            <p style="color: #666; word-break: break-all;">${verifyUrl}</p>
+                            <p>If you didn't create an account with Pakistan Online, please ignore this email.</p>
+                        </div>
+                    `
+                });
+                console.log('Verification email sent successfully to:', user.email);
+            } else {
+                console.warn('Email configuration missing. Verification email not sent.');
+            }
+            
+            return res.status(201).json({ 
+                success: true, 
+                message: 'Registration successful! Please check your email to verify your account.' 
+            });
+        } catch (emailError) {
+            console.error('Email sending error:', emailError);
+            // Still return success since user was created, just email failed
+            return res.status(201).json({ 
+                success: true, 
+                message: 'Registration successful! Email verification temporarily unavailable.' 
+            });
+        }
     });
 });
 
@@ -418,7 +450,11 @@ app.post("/login", function(req, res, next) {
         }
         // In development, allow unverified users to login
         if (!user.verified && process.env.NODE_ENV !== 'development') {
-            return res.status(401).json({ error: 'Please verify your email before logging in.' });
+            return res.status(401).json({ 
+                error: 'Please verify your email before logging in.',
+                needsVerification: true,
+                email: user.email
+            });
         }
         req.logIn(user, function(err) {
             if (err) {
@@ -427,6 +463,72 @@ app.post("/login", function(req, res, next) {
             return res.status(200).json({ success: true, message: 'Login successful', user: { id: user._id, email: user.email, username: user.username } });
         });
     })(req, res, next);
+});
+
+// Resend verification email
+app.post('/resend-verification', async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    try {
+        const user = await User.findOne({ email: email });
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        if (user.verified) {
+            return res.status(400).json({ error: 'Email is already verified' });
+        }
+        
+        // Generate new verification token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        user.verificationToken = verificationToken;
+        await user.save();
+        
+        // Send verification email
+        const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
+        
+        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: user.email,
+                subject: 'Verify your email for Pakistan Online',
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #2563eb;">Email Verification - Pakistan Online</h2>
+                        <p>Hi ${user.fullName},</p>
+                        <p>Please verify your email address by clicking the button below:</p>
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Email Address</a>
+                        </div>
+                        <p>Or copy and paste this link in your browser:</p>
+                        <p style="color: #666; word-break: break-all;">${verifyUrl}</p>
+                        <p>If you didn't request this verification email, please ignore it.</p>
+                    </div>
+                `
+            });
+            console.log('Verification email resent successfully to:', user.email);
+            
+            return res.status(200).json({ 
+                success: true, 
+                message: 'Verification email sent! Please check your inbox.' 
+            });
+        } else {
+            console.warn('Email configuration missing. Cannot send verification email.');
+            return res.status(500).json({ 
+                error: 'Email service temporarily unavailable. Please contact support.' 
+            });
+        }
+    } catch (error) {
+        console.error('Error resending verification email:', error);
+        return res.status(500).json({ 
+            error: 'Failed to send verification email. Please try again later.' 
+        });
+    }
 });
 
 app.get('/auth/google',
