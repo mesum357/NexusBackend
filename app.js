@@ -316,7 +316,6 @@ mongoose.connect(mongoURI, mongooseOptions)
 
 // Configure Mongoose settings
 mongoose.set('bufferCommands', false); // Disable mongoose buffering
-mongoose.set('bufferMaxEntries', 0); // Disable mongoose buffering
 
 // Add connection event listeners
 mongoose.connection.on('connected', () => {
