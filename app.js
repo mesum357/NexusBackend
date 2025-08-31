@@ -79,7 +79,8 @@ app.use(cors({
       'http://localhost:8083', // Frontend dev
       'http://localhost:8082', // Frontend dev
       'https://pakistanonlines.com',
-      'http://pakistanonlines.com'
+      'http://pakistanonlines.com',
+      'https://nexus-frontend-4sr8.onrender.com' // Nexus Frontend on Render
     ];
     
     // Add environment-specific origins
