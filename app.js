@@ -257,17 +257,16 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // MONGOOSE
-// The mongfooos options are the
+// MongoDB connection options
 const mongooseOptions = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
     serverSelectionTimeoutMS: 10000, // 10 seconds
     socketTimeoutMS: 30000, // 30 seconds
     connectTimeoutMS: 10000, // 10 seconds
     maxPoolSize: 10,
     minPoolSize: 1,
     maxIdleTimeMS: 30000,
-    bufferMaxEntries: 0
+    heartbeatFrequencyMS: 10000, // Keep connection alive
+    retryWrites: true
 };
 
 if (process.env.NODE_ENV === 'production') {
@@ -284,14 +283,61 @@ if (!mongoURI) {
     process.exit(1);
 }
 
+console.log('🔍 MongoDB URI check:');
+console.log('URI starts with mongodb:', mongoURI.startsWith('mongodb'));
+console.log('URI length:', mongoURI.length);
+console.log('URI format:', mongoURI.substring(0, 20) + '...' + mongoURI.substring(mongoURI.length - 20));
+
+console.log('🔌 Connecting to MongoDB with options:', mongooseOptions);
+
 mongoose.connect(mongoURI, mongooseOptions)
     .then(() => {
-        console.log("Connected to MongoDB ");
+        console.log("✅ Connected to MongoDB successfully");
+        console.log("📊 MongoDB connection state:", mongoose.connection.readyState);
+        console.log("🏗️ Database name:", mongoose.connection.name);
     })
     .catch((err) => {
-        console.error("Error connecting to MongoDB Atlas:", err);
-        process.exit(1);
+        console.error("❌ Error connecting to MongoDB Atlas:");
+        console.error("Error details:", {
+            name: err.name,
+            message: err.message,
+            code: err.code,
+            codeName: err.codeName
+        });
+        console.error("Full error:", err);
+        
+        // Don't exit in production, continue without DB for debugging
+        if (process.env.NODE_ENV !== 'production') {
+            process.exit(1);
+        } else {
+            console.warn("⚠️ Continuing without database connection in production mode");
+        }
     });
+
+// Configure Mongoose settings
+mongoose.set('bufferCommands', false); // Disable mongoose buffering
+mongoose.set('bufferMaxEntries', 0); // Disable mongoose buffering
+
+// Add connection event listeners
+mongoose.connection.on('connected', () => {
+    console.log('🔗 Mongoose connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+    console.error('❌ Mongoose connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('💔 Mongoose disconnected from MongoDB');
+});
+
+mongoose.connection.on('reconnected', () => {
+    console.log('🔄 Mongoose reconnected to MongoDB');
+});
+
+mongoose.connection.on('timeout', () => {
+    console.log('⏰ Mongoose connection timeout');
+});
 
 const User = require('./models/User');
 const Institute = require('./models/Institute');
