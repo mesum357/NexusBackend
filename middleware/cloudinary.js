@@ -34,7 +34,12 @@ const storage = new CloudinaryStorage({
     let folder = 'pak-nexus/general';
     let transformation = [{ quality: 'auto', fetch_format: 'auto' }];
     
-    if (file.fieldname === 'gallery') {
+    if (file.fieldname === 'profileImage') {
+      folder = 'pak-nexus/profiles';
+      transformation = [
+        { width: 200, height: 200, crop: 'fill', gravity: 'face', quality: 80, fetch_format: 'auto' }
+      ];
+    } else if (file.fieldname === 'gallery') {
       folder = 'pak-nexus/gallery';
       transformation = [
         { width: 1200, height: 800, crop: 'limit', quality: 'auto', fetch_format: 'auto' }
@@ -74,8 +79,10 @@ try {
   upload = multer({ 
     storage: storage,
     limits: {
-      fileSize: 5 * 1024 * 1024 // 5MB limit
-    }
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+      files: 1 // Only one file at a time
+    },
+    timeout: 30000 // 30 second timeout
   });
   
   console.log('✅ Cloudinary configured successfully');

@@ -520,7 +520,14 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
     
     // Add profile image if uploaded
     if (req.file) {
-        console.log('📸 Profile image detected, adding to user data:', req.file.path);
+        console.log('📸 Profile image detected, processing completed at', Date.now() - startTime, 'ms');
+        console.log('📸 Cloudinary details:', {
+            originalName: req.file.originalname,
+            size: req.file.size,
+            mimetype: req.file.mimetype,
+            cloudinaryUrl: req.file.path,
+            uploadDuration: 'processed by middleware'
+        });
         userData.profileImage = req.file.path; // Cloudinary URL
     } else {
         console.log('📸 No profile image uploaded');
@@ -538,8 +545,10 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
     
     console.log('⏱️ Step 4: Starting User.register() at', Date.now() - startTime, 'ms');
     
+    const userRegisterStartTime = Date.now();
     User.register(userData, password, async function(err, user) {
         const registerTime = Date.now() - startTime;
+        const userRegisterDuration = Date.now() - userRegisterStartTime;
         
         if (err) {
             console.error('❌ User.register() failed at', registerTime, 'ms');
@@ -559,6 +568,7 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
         }
         
         console.log('✅ User.register() completed successfully at', registerTime, 'ms');
+        console.log('📊 User.register() duration:', userRegisterDuration, 'ms');
         console.log('👤 Created user details:', {
             id: user._id,
             username: user.username,
@@ -580,7 +590,9 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
             console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
             console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
             console.log('EMAIL_USER value:', process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 3)}***` : 'not set');
-            console.log('All env vars:', Object.keys(process.env).filter(key => key.includes('EMAIL')));
+            console.log('EMAIL_PASS value:', process.env.EMAIL_PASS ? `[${process.env.EMAIL_PASS.length} chars]` : 'not set');
+            console.log('All EMAIL env vars:', Object.keys(process.env).filter(key => key.includes('EMAIL')));
+            console.log('All env vars (first 10):', Object.keys(process.env).slice(0, 10));
             
             if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
                 console.log('✅ Email configuration found, preparing to send email...');
@@ -860,6 +872,57 @@ app.post('/resend-verification', async (req, res) => {
             } : undefined
         });
     }
+});
+
+// Fast registration endpoint (without file upload for testing)
+app.post("/register-fast", async function(req, res) {
+    const startTime = Date.now();
+    console.log('🚀 FAST REGISTRATION REQUEST RECEIVED AT:', new Date().toISOString());
+    
+    const { password, confirmPassword, email, fullName, mobile } = req.body;
+    console.log('📝 Fast registration fields:', { email, fullName, mobile, passwordLength: password?.length });
+    
+    // Validation
+    if (!password || !confirmPassword || !email || !fullName || !mobile) {
+        return res.status(400).json({ error: 'All fields are required' });
+    }
+    if (password !== confirmPassword) {
+        return res.status(400).json({ error: 'Passwords do not match' });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    
+    // Prepare user data (no profile image)
+    const userData = {
+        username: email,
+        email: email,
+        fullName: fullName,
+        mobile: mobile,
+        verified: false,
+        verificationToken
+    };
+    
+    console.log('⏱️ Starting fast User.register() at', Date.now() - startTime, 'ms');
+    
+    User.register(userData, password, async function(err, user) {
+        if (err) {
+            console.error('❌ Fast registration failed:', err);
+            return res.status(400).json({ error: 'Registration failed' });
+        }
+        
+        const totalTime = Date.now() - startTime;
+        console.log('✅ Fast registration completed in', totalTime, 'ms');
+        
+        return res.status(201).json({ 
+            success: true, 
+            message: 'Fast registration successful!',
+            processingTime: totalTime
+        });
+    });
 });
 
 // Health check endpoint
