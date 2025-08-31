@@ -64,18 +64,63 @@ const LocalStrategy = require('passport-local').Strategy;
 console.log('📧 Setting up nodemailer transporter...');
 console.log('📧 EMAIL_USER:', process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 5)}***` : 'NOT SET');
 console.log('📧 EMAIL_PASS:', process.env.EMAIL_PASS ? `[${process.env.EMAIL_PASS.length} chars]` : 'NOT SET');
+console.log('📧 EMAIL_SERVICE:', process.env.EMAIL_SERVICE || 'gmail (default)');
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  debug: true, // Enable debug output
-  logger: true, // Log information in console
+// Enhanced email configuration with multiple service support
+let transporterConfig;
+
+if (process.env.EMAIL_SERVICE === 'sendgrid') {
+  // SendGrid configuration
+  transporterConfig = {
+    host: 'smtp.sendgrid.net',
+    port: 587,
+    secure: false,
+    auth: {
+      user: 'apikey',
+      pass: process.env.SENDGRID_API_KEY
+    }
+  };
+} else if (process.env.EMAIL_SERVICE === 'mailgun') {
+  // Mailgun configuration
+  transporterConfig = {
+    host: 'smtp.mailgun.org',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.MAILGUN_SMTP_LOGIN,
+      pass: process.env.MAILGUN_SMTP_PASSWORD
+    }
+  };
+} else if (process.env.EMAIL_SERVICE === 'smtp') {
+  // Custom SMTP configuration
+  transporterConfig = {
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  };
+} else {
+  // Gmail configuration (default)
+  transporterConfig = {
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  };
+}
+
+// Add common configuration options
+const transporter = nodemailer.createTransporter({
+  ...transporterConfig,
+  debug: process.env.NODE_ENV === 'development', // Enable debug in development
+  logger: process.env.NODE_ENV === 'development', // Log information in development
   connectionTimeout: 10000, // 10 seconds
   greetingTimeout: 5000, // 5 seconds
   socketTimeout: 15000 // 15 seconds
@@ -587,18 +632,48 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
             
             // Check if email configuration exists
             console.log('📧 Checking email configuration...');
-            console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
-            console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
-            console.log('EMAIL_USER value:', process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 3)}***` : 'not set');
-            console.log('EMAIL_PASS value:', process.env.EMAIL_PASS ? `[${process.env.EMAIL_PASS.length} chars]` : 'not set');
-            console.log('All EMAIL env vars:', Object.keys(process.env).filter(key => key.includes('EMAIL')));
-            console.log('All env vars (first 10):', Object.keys(process.env).slice(0, 10));
+            const emailService = process.env.EMAIL_SERVICE || 'gmail';
+            console.log('📧 Email service:', emailService);
             
-            if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            let emailConfigValid = false;
+            
+            if (emailService === 'sendgrid') {
+                emailConfigValid = !!process.env.SENDGRID_API_KEY;
+                console.log('SENDGRID_API_KEY exists:', emailConfigValid);
+            } else if (emailService === 'mailgun') {
+                emailConfigValid = !!(process.env.MAILGUN_SMTP_LOGIN && process.env.MAILGUN_SMTP_PASSWORD);
+                console.log('MAILGUN_SMTP_LOGIN exists:', !!process.env.MAILGUN_SMTP_LOGIN);
+                console.log('MAILGUN_SMTP_PASSWORD exists:', !!process.env.MAILGUN_SMTP_PASSWORD);
+            } else if (emailService === 'smtp') {
+                emailConfigValid = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+                console.log('SMTP_HOST exists:', !!process.env.SMTP_HOST);
+                console.log('SMTP_USER exists:', !!process.env.SMTP_USER);
+                console.log('SMTP_PASS exists:', !!process.env.SMTP_PASS);
+            } else {
+                // Gmail (default)
+                emailConfigValid = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+                console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
+                console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
+                console.log('EMAIL_USER value:', process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 3)}***` : 'not set');
+                console.log('EMAIL_PASS value:', process.env.EMAIL_PASS ? `[${process.env.EMAIL_PASS.length} chars]` : 'not set');
+            }
+            
+            console.log('All EMAIL env vars:', Object.keys(process.env).filter(key => key.includes('EMAIL')));
+            console.log('Email configuration valid:', emailConfigValid);
+            
+            if (emailConfigValid) {
                 console.log('✅ Email configuration found, preparing to send email...');
                 
+                // Determine the from address based on email service
+                let fromEmail = process.env.EMAIL_USER;
+                if (emailService === 'sendgrid' || emailService === 'smtp') {
+                    fromEmail = process.env.SMTP_USER || process.env.EMAIL_USER;
+                } else if (emailService === 'mailgun') {
+                    fromEmail = process.env.MAILGUN_SMTP_LOGIN || process.env.EMAIL_USER;
+                }
+                
                 const emailData = {
-                    from: process.env.EMAIL_USER,
+                    from: fromEmail || 'noreply@pakistanonlines.com',
                     to: user.email,
                     subject: 'Verify your email for Pakistan Online',
                     html: `
@@ -638,13 +713,24 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
                 console.log('📮 Email sent to:', user.email);
             } else {
                 console.warn('⚠️ Email configuration missing at', Date.now() - startTime, 'ms');
-                console.warn('EMAIL_USER:', process.env.EMAIL_USER ? 'SET' : 'NOT SET');
-                console.warn('EMAIL_PASS:', process.env.EMAIL_PASS ? 'SET' : 'NOT SET');
+                console.warn('📧 Email service:', emailService);
                 console.warn('❌ Cannot send verification email - environment variables not configured');
+                
+                // Log missing variables based on service
+                if (emailService === 'sendgrid') {
+                    console.warn('Missing: SENDGRID_API_KEY');
+                } else if (emailService === 'mailgun') {
+                    console.warn('Missing: MAILGUN_SMTP_LOGIN, MAILGUN_SMTP_PASSWORD');
+                } else if (emailService === 'smtp') {
+                    console.warn('Missing: SMTP_HOST, SMTP_USER, SMTP_PASS');
+                } else {
+                    console.warn('Missing: EMAIL_USER, EMAIL_PASS');
+                }
                 
                 // Log all environment variables that contain 'email' for debugging
                 const emailVars = Object.keys(process.env).filter(key => 
-                    key.toLowerCase().includes('email') || key.toLowerCase().includes('mail')
+                    key.toLowerCase().includes('email') || key.toLowerCase().includes('mail') || 
+                    key.toLowerCase().includes('smtp') || key.toLowerCase().includes('sendgrid')
                 );
                 console.warn('🔍 Available email-related env vars:', emailVars);
             }
@@ -654,10 +740,13 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
             
             return res.status(201).json({ 
                 success: true, 
-                message: 'Registration successful! Please check your email to verify your account.',
+                message: emailConfigValid 
+                    ? 'Registration successful! Check your email for verification link.'
+                    : 'Registration successful! Email verification temporarily unavailable.',
                 debug: process.env.NODE_ENV === 'development' ? {
                     processingTime: totalTime,
-                    emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS)
+                    emailConfigured: emailConfigValid,
+                    emailService: emailService
                 } : undefined
             });
         } catch (emailError) {
@@ -791,14 +880,45 @@ app.post('/resend-verification', async (req, res) => {
         console.log('🔗 Generated verification URL:', verifyUrl);
         
         console.log('📧 Checking email configuration for resend...');
-        console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
-        console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
+        const emailService = process.env.EMAIL_SERVICE || 'gmail';
+        console.log('📧 Email service:', emailService);
         
-        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+        let emailConfigValid = false;
+        
+        if (emailService === 'sendgrid') {
+            emailConfigValid = !!process.env.SENDGRID_API_KEY;
+            console.log('SENDGRID_API_KEY exists:', emailConfigValid);
+        } else if (emailService === 'mailgun') {
+            emailConfigValid = !!(process.env.MAILGUN_SMTP_LOGIN && process.env.MAILGUN_SMTP_PASSWORD);
+            console.log('MAILGUN_SMTP_LOGIN exists:', !!process.env.MAILGUN_SMTP_LOGIN);
+            console.log('MAILGUN_SMTP_PASSWORD exists:', !!process.env.MAILGUN_SMTP_PASSWORD);
+        } else if (emailService === 'smtp') {
+            emailConfigValid = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+            console.log('SMTP_HOST exists:', !!process.env.SMTP_HOST);
+            console.log('SMTP_USER exists:', !!process.env.SMTP_USER);
+            console.log('SMTP_PASS exists:', !!process.env.SMTP_PASS);
+        } else {
+            // Gmail (default)
+            emailConfigValid = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+            console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
+            console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
+        }
+        
+        console.log('Email configuration valid for resend:', emailConfigValid);
+        
+        if (emailConfigValid) {
             console.log('✅ Email configuration found, preparing to resend email...');
             
+            // Determine the from address based on email service
+            let fromEmail = process.env.EMAIL_USER;
+            if (emailService === 'sendgrid' || emailService === 'smtp') {
+                fromEmail = process.env.SMTP_USER || process.env.EMAIL_USER;
+            } else if (emailService === 'mailgun') {
+                fromEmail = process.env.MAILGUN_SMTP_LOGIN || process.env.EMAIL_USER;
+            }
+            
             const emailData = {
-                from: process.env.EMAIL_USER,
+                from: fromEmail || 'noreply@pakistanonlines.com',
                 to: user.email,
                 subject: 'Verify your email for Pakistan Online',
                 html: `
@@ -851,11 +971,25 @@ app.post('/resend-verification', async (req, res) => {
             });
         } else {
             console.warn('⚠️ Email configuration missing for resend at', Date.now() - startTime, 'ms');
-            console.warn('EMAIL_USER:', process.env.EMAIL_USER ? 'SET' : 'NOT SET');
-            console.warn('EMAIL_PASS:', process.env.EMAIL_PASS ? 'SET' : 'NOT SET');
+            console.warn('📧 Email service:', emailService);
+            
+            // Log missing variables based on service
+            if (emailService === 'sendgrid') {
+                console.warn('Missing: SENDGRID_API_KEY');
+            } else if (emailService === 'mailgun') {
+                console.warn('Missing: MAILGUN_SMTP_LOGIN, MAILGUN_SMTP_PASSWORD');
+            } else if (emailService === 'smtp') {
+                console.warn('Missing: SMTP_HOST, SMTP_USER, SMTP_PASS');
+            } else {
+                console.warn('Missing: EMAIL_USER, EMAIL_PASS');
+            }
             
             return res.status(500).json({ 
-                error: 'Email service temporarily unavailable. Please contact support.' 
+                error: 'Email service temporarily unavailable. Please contact support.',
+                debug: process.env.NODE_ENV === 'development' ? {
+                    emailService: emailService,
+                    configMissing: true
+                } : undefined
             });
         }
     } catch (error) {
