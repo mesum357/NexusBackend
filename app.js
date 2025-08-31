@@ -9,6 +9,21 @@ console.log('📍 PORT:', PORT);
 console.log('🚂 Railway Environment:', process.env.RAILWAY_ENVIRONMENT || 'not set');
 console.log('🚂 Railway Static URL:', process.env.RAILWAY_STATIC_URL || 'not set');
 console.log('🚂 Railway Service Name:', process.env.RAILWAY_SERVICE_NAME || 'not set');
+
+// Debug environment variables on startup
+console.log('');
+console.log('🔍 Environment Variables Debug:');
+console.log('NODE_ENV:', process.env.NODE_ENV || 'not set');
+console.log('PORT:', process.env.PORT || 'not set');
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'SET (mongodb+srv://...)' : 'NOT SET');
+console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'SET' : 'NOT SET');
+console.log('EMAIL_USER:', process.env.EMAIL_USER ? `SET (${process.env.EMAIL_USER.substring(0, 5)}***)` : 'NOT SET');
+console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? `SET (${process.env.EMAIL_PASS.length} chars)` : 'NOT SET');
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL || 'not set');
+console.log('CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME ? 'SET' : 'NOT SET');
+console.log('CLOUDINARY_API_KEY:', process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT SET');
+console.log('CLOUDINARY_API_SECRET:', process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET');
+console.log('');
 const http = require('http');
 const path = require('path');
 const socketIo = require('socket.io');
@@ -45,7 +60,11 @@ const { upload } = require('./middleware/cloudinary');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const LocalStrategy = require('passport-local').Strategy;
 
-// Email setup
+// Email setup with debugging
+console.log('📧 Setting up nodemailer transporter...');
+console.log('📧 EMAIL_USER:', process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 5)}***` : 'NOT SET');
+console.log('📧 EMAIL_PASS:', process.env.EMAIL_PASS ? `[${process.env.EMAIL_PASS.length} chars]` : 'NOT SET');
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -54,6 +73,25 @@ const transporter = nodemailer.createTransport({
   },
   tls: {
     rejectUnauthorized: false
+  },
+  debug: true, // Enable debug output
+  logger: true // Log information in console
+});
+
+// Test transporter configuration on startup
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error('❌ Nodemailer transporter verification failed:');
+    console.error('📧 Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response
+    });
+  } else {
+    console.log('✅ Nodemailer transporter verified successfully');
+    console.log('📧 Server is ready to send emails');
   }
 });
 
@@ -80,7 +118,9 @@ app.use(cors({
       'http://localhost:8082', // Frontend dev
       'https://pakistanonlines.com',
       'http://pakistanonlines.com',
-      'https://nexus-frontend-4sr8.onrender.com' // Nexus Frontend on Render
+      'https://nexus-frontend-4sr8.onrender.com', // Nexus Frontend on Render
+      'https://nexus-frontend-production-5300.up.railway.app', // Nexus Frontend on Railway
+      'https://nexusadminpanel-production.up.railway.app' // Admin Panel on Railway
     ];
     
     // Add environment-specific origins
@@ -338,29 +378,52 @@ app.get('/register', function(req, res) {
 
 // Register API route
 app.post("/register", upload.single('profileImage'), async function(req, res) {
-    console.log('🔥 REGISTRATION REQUEST RECEIVED');
-    console.log('📝 Request headers:', req.headers);
-    console.log('📝 Request body:', req.body);
-    console.log('📁 Request file:', req.file);
+    const startTime = Date.now();
+    console.log('🔥 REGISTRATION REQUEST RECEIVED AT:', new Date().toISOString());
+    console.log('📝 Request headers:', JSON.stringify(req.headers, null, 2));
+    console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+    console.log('📁 Request file:', req.file ? {
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        path: req.file.path
+    } : 'No file uploaded');
     
     const { password, confirmPassword, email, fullName, mobile } = req.body;
-    console.log('🧩 Extracted fields:', { password: !!password, confirmPassword: !!confirmPassword, email, fullName, mobile });
+    console.log('🧩 Extracted fields:', { 
+        password: password ? `[${password.length} chars]` : 'missing', 
+        confirmPassword: confirmPassword ? `[${confirmPassword.length} chars]` : 'missing', 
+        email, 
+        fullName, 
+        mobile 
+    });
+    
+    console.log('⏱️ Step 1: Validation started at', Date.now() - startTime, 'ms');
     
     // Validation
     if (!password || !confirmPassword || !email || !fullName || !mobile) {
+        console.log('❌ Validation failed: Missing required fields');
         return res.status(400).json({ error: 'All fields are required' });
     }
     if (password !== confirmPassword) {
+        console.log('❌ Validation failed: Passwords do not match');
         return res.status(400).json({ error: 'Passwords do not match' });
     }
     if (password.length < 6) {
+        console.log('❌ Validation failed: Password too short');
         return res.status(400).json({ error: 'Password must be at least 6 characters long' });
     }
     
+    console.log('✅ Validation passed at', Date.now() - startTime, 'ms');
+    
     // Generate verification token
+    console.log('⏱️ Step 2: Generating verification token...');
     const verificationToken = crypto.randomBytes(32).toString('hex');
+    console.log('✅ Verification token generated:', verificationToken.substring(0, 10) + '...', 'at', Date.now() - startTime, 'ms');
     
     // Prepare user data
+    console.log('⏱️ Step 3: Preparing user data...');
     const userData = {
         username: email, // Keep username as email for compatibility
         email: email,
@@ -372,26 +435,71 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
     
     // Add profile image if uploaded
     if (req.file) {
+        console.log('📸 Profile image detected, adding to user data:', req.file.path);
         userData.profileImage = req.file.path; // Cloudinary URL
+    } else {
+        console.log('📸 No profile image uploaded');
     }
     
+    console.log('✅ User data prepared at', Date.now() - startTime, 'ms:', {
+        username: userData.username,
+        email: userData.email,
+        fullName: userData.fullName,
+        mobile: userData.mobile,
+        verified: userData.verified,
+        hasProfileImage: !!userData.profileImage,
+        tokenLength: userData.verificationToken.length
+    });
+    
+    console.log('⏱️ Step 4: Starting User.register() at', Date.now() - startTime, 'ms');
+    
     User.register(userData, password, async function(err, user) {
+        const registerTime = Date.now() - startTime;
+        
         if (err) {
-            console.error('Registration error:', err); // Log registration errors
+            console.error('❌ User.register() failed at', registerTime, 'ms');
+            console.error('📝 Registration error details:', {
+                name: err.name,
+                message: err.message,
+                code: err.code,
+                stack: err.stack?.split('\n').slice(0, 5).join('\n')
+            });
+            
             let errorMessage = 'Registration failed';
             if (err.name === 'UserExistsError') {
                 errorMessage = 'User already exists with this email';
+                console.log('🔍 User already exists error for email:', email);
             }
             return res.status(400).json({ error: errorMessage });
         }
         
+        console.log('✅ User.register() completed successfully at', registerTime, 'ms');
+        console.log('👤 Created user details:', {
+            id: user._id,
+            username: user.username,
+            email: user.email,
+            fullName: user.fullName,
+            verified: user.verified,
+            hasVerificationToken: !!user.verificationToken
+        });
+        
         try {
+            console.log('⏱️ Step 5: Starting email verification process at', Date.now() - startTime, 'ms');
+            
             // Send verification email
             const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
+            console.log('🔗 Generated verification URL:', verifyUrl);
             
             // Check if email configuration exists
+            console.log('📧 Checking email configuration...');
+            console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
+            console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
+            console.log('EMAIL_USER value:', process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 3)}***` : 'not set');
+            
             if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-                await transporter.sendMail({
+                console.log('✅ Email configuration found, preparing to send email...');
+                
+                const emailData = {
                     from: process.env.EMAIL_USER,
                     to: user.email,
                     subject: 'Verify your email for Pakistan Online',
@@ -407,22 +515,59 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
                             <p>If you didn't create an account with Pakistan Online, please ignore this email.</p>
                         </div>
                     `
+                };
+                
+                console.log('📤 Sending email with data:', {
+                    from: emailData.from,
+                    to: emailData.to,
+                    subject: emailData.subject,
+                    htmlLength: emailData.html.length
                 });
-                console.log('Verification email sent successfully to:', user.email);
+                
+                const emailStartTime = Date.now();
+                await transporter.sendMail(emailData);
+                const emailEndTime = Date.now();
+                
+                console.log('✅ Verification email sent successfully at', Date.now() - startTime, 'ms');
+                console.log('📧 Email send duration:', emailEndTime - emailStartTime, 'ms');
+                console.log('📮 Email sent to:', user.email);
             } else {
-                console.warn('Email configuration missing. Verification email not sent.');
+                console.warn('⚠️ Email configuration missing at', Date.now() - startTime, 'ms');
+                console.warn('EMAIL_USER:', process.env.EMAIL_USER ? 'SET' : 'NOT SET');
+                console.warn('EMAIL_PASS:', process.env.EMAIL_PASS ? 'SET' : 'NOT SET');
             }
+            
+            const totalTime = Date.now() - startTime;
+            console.log('🎉 Registration process completed successfully at', totalTime, 'ms');
             
             return res.status(201).json({ 
                 success: true, 
-                message: 'Registration successful! Please check your email to verify your account.' 
+                message: 'Registration successful! Please check your email to verify your account.',
+                debug: process.env.NODE_ENV === 'development' ? {
+                    processingTime: totalTime,
+                    emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS)
+                } : undefined
             });
         } catch (emailError) {
-            console.error('Email sending error:', emailError);
+            const errorTime = Date.now() - startTime;
+            console.error('❌ Email sending error at', errorTime, 'ms');
+            console.error('📧 Email error details:', {
+                name: emailError.name,
+                message: emailError.message,
+                code: emailError.code,
+                command: emailError.command,
+                response: emailError.response,
+                responseCode: emailError.responseCode
+            });
+            
             // Still return success since user was created, just email failed
             return res.status(201).json({ 
                 success: true, 
-                message: 'Registration successful! Email verification temporarily unavailable.' 
+                message: 'Registration successful! Email verification temporarily unavailable.',
+                debug: process.env.NODE_ENV === 'development' ? {
+                    processingTime: errorTime,
+                    emailError: emailError.message
+                } : undefined
             });
         }
     });
@@ -455,7 +600,7 @@ app.get('/verify-email', async (req, res) => {
             }
             
             // Redirect to frontend with success message
-            const frontendUrl = process.env.FRONTEND_URL || 'https://nexus-frontend-4sr8.onrender.com' || 'http://localhost:5173';
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
             return res.redirect(`${frontendUrl}/?verified=true&message=Email verified and logged in successfully!`);
         });
     } catch (error) {
@@ -492,33 +637,55 @@ app.post("/login", function(req, res, next) {
 
 // Resend verification email
 app.post('/resend-verification', async (req, res) => {
+    const startTime = Date.now();
+    console.log('🔄 RESEND VERIFICATION REQUEST RECEIVED AT:', new Date().toISOString());
+    
     const { email } = req.body;
+    console.log('📧 Resend verification requested for email:', email);
     
     if (!email) {
+        console.log('❌ Resend verification failed: Email is required');
         return res.status(400).json({ error: 'Email is required' });
     }
     
     try {
+        console.log('⏱️ Step 1: Finding user in database at', Date.now() - startTime, 'ms');
         const user = await User.findOne({ email: email });
         
         if (!user) {
+            console.log('❌ Resend verification failed: User not found for email:', email);
             return res.status(404).json({ error: 'User not found' });
         }
         
+        console.log('✅ User found:', { id: user._id, email: user.email, verified: user.verified });
+        
         if (user.verified) {
+            console.log('❌ Resend verification failed: Email already verified for:', email);
             return res.status(400).json({ error: 'Email is already verified' });
         }
         
+        console.log('⏱️ Step 2: Generating new verification token at', Date.now() - startTime, 'ms');
         // Generate new verification token
         const verificationToken = crypto.randomBytes(32).toString('hex');
+        console.log('🔑 New verification token generated:', verificationToken.substring(0, 10) + '...');
+        
         user.verificationToken = verificationToken;
         await user.save();
+        console.log('✅ User verification token updated and saved at', Date.now() - startTime, 'ms');
         
+        console.log('⏱️ Step 3: Preparing verification email at', Date.now() - startTime, 'ms');
         // Send verification email
         const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
+        console.log('🔗 Generated verification URL:', verifyUrl);
+        
+        console.log('📧 Checking email configuration for resend...');
+        console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
+        console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
         
         if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-            await transporter.sendMail({
+            console.log('✅ Email configuration found, preparing to resend email...');
+            
+            const emailData = {
                 from: process.env.EMAIL_USER,
                 to: user.email,
                 subject: 'Verify your email for Pakistan Online',
@@ -535,23 +702,176 @@ app.post('/resend-verification', async (req, res) => {
                         <p>If you didn't request this verification email, please ignore it.</p>
                     </div>
                 `
+            };
+            
+            console.log('📤 Resending email with data:', {
+                from: emailData.from,
+                to: emailData.to,
+                subject: emailData.subject,
+                htmlLength: emailData.html.length
             });
-            console.log('Verification email resent successfully to:', user.email);
+            
+            const emailStartTime = Date.now();
+            await transporter.sendMail(emailData);
+            const emailEndTime = Date.now();
+            
+            console.log('✅ Verification email resent successfully at', Date.now() - startTime, 'ms');
+            console.log('📧 Email resend duration:', emailEndTime - emailStartTime, 'ms');
+            console.log('📮 Email resent to:', user.email);
+            
+            const totalTime = Date.now() - startTime;
+            console.log('🎉 Resend verification process completed successfully at', totalTime, 'ms');
             
             return res.status(200).json({ 
                 success: true, 
-                message: 'Verification email sent! Please check your inbox.' 
+                message: 'Verification email sent! Please check your inbox.',
+                debug: process.env.NODE_ENV === 'development' ? {
+                    processingTime: totalTime,
+                    emailConfigured: true
+                } : undefined
             });
         } else {
-            console.warn('Email configuration missing. Cannot send verification email.');
+            console.warn('⚠️ Email configuration missing for resend at', Date.now() - startTime, 'ms');
+            console.warn('EMAIL_USER:', process.env.EMAIL_USER ? 'SET' : 'NOT SET');
+            console.warn('EMAIL_PASS:', process.env.EMAIL_PASS ? 'SET' : 'NOT SET');
+            
             return res.status(500).json({ 
                 error: 'Email service temporarily unavailable. Please contact support.' 
             });
         }
     } catch (error) {
-        console.error('Error resending verification email:', error);
+        const errorTime = Date.now() - startTime;
+        console.error('❌ Error resending verification email at', errorTime, 'ms');
+        console.error('📧 Resend error details:', {
+            name: error.name,
+            message: error.message,
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            responseCode: error.responseCode,
+            stack: error.stack?.split('\n').slice(0, 5).join('\n')
+        });
+        
         return res.status(500).json({ 
-            error: 'Failed to send verification email. Please try again later.' 
+            error: 'Failed to send verification email. Please try again later.',
+            debug: process.env.NODE_ENV === 'development' ? {
+                processingTime: errorTime,
+                errorMessage: error.message
+            } : undefined
+        });
+    }
+});
+
+// Test email endpoint for debugging
+app.post('/test-email', async (req, res) => {
+    const startTime = Date.now();
+    console.log('🧪 EMAIL TEST REQUEST RECEIVED AT:', new Date().toISOString());
+    
+    const { email, subject, message } = req.body;
+    console.log('📧 Test email requested for:', email);
+    console.log('📧 Subject:', subject);
+    console.log('📧 Message length:', message?.length || 0);
+    
+    if (!email) {
+        console.log('❌ Test email failed: Email is required');
+        return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    try {
+        console.log('📧 Checking email configuration...');
+        console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
+        console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
+        console.log('EMAIL_USER value:', process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 5)}***` : 'not set');
+        
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            console.log('❌ Email configuration missing');
+            return res.status(500).json({ 
+                error: 'Email configuration not found',
+                debug: {
+                    EMAIL_USER: !!process.env.EMAIL_USER,
+                    EMAIL_PASS: !!process.env.EMAIL_PASS
+                }
+            });
+        }
+        
+        console.log('✅ Email configuration found, preparing test email...');
+        
+        const emailData = {
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: subject || 'Test Email from Pakistan Online',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #2563eb;">Test Email - Pakistan Online</h2>
+                    <p>This is a test email sent at ${new Date().toISOString()}</p>
+                    <p>${message || 'This is a test message to verify email functionality.'}</p>
+                    <p>If you received this email, the email service is working correctly!</p>
+                    <hr>
+                    <p style="font-size: 12px; color: #666;">
+                        Sent from Pakistan Online Backend<br>
+                        Server time: ${new Date().toString()}
+                    </p>
+                </div>
+            `
+        };
+        
+        console.log('📤 Sending test email with data:', {
+            from: emailData.from,
+            to: emailData.to,
+            subject: emailData.subject,
+            htmlLength: emailData.html.length
+        });
+        
+        const emailStartTime = Date.now();
+        const result = await transporter.sendMail(emailData);
+        const emailEndTime = Date.now();
+        
+        console.log('✅ Test email sent successfully at', Date.now() - startTime, 'ms');
+        console.log('📧 Email send duration:', emailEndTime - emailStartTime, 'ms');
+        console.log('📮 Email result:', {
+            messageId: result.messageId,
+            response: result.response,
+            accepted: result.accepted,
+            rejected: result.rejected
+        });
+        
+        const totalTime = Date.now() - startTime;
+        console.log('🎉 Test email process completed successfully at', totalTime, 'ms');
+        
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Test email sent successfully!',
+            result: {
+                messageId: result.messageId,
+                response: result.response,
+                accepted: result.accepted,
+                rejected: result.rejected,
+                processingTime: totalTime,
+                emailSendTime: emailEndTime - emailStartTime
+            }
+        });
+        
+    } catch (error) {
+        const errorTime = Date.now() - startTime;
+        console.error('❌ Test email error at', errorTime, 'ms');
+        console.error('📧 Test email error details:', {
+            name: error.name,
+            message: error.message,
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            responseCode: error.responseCode,
+            stack: error.stack?.split('\n').slice(0, 10).join('\n')
+        });
+        
+        return res.status(500).json({ 
+            error: 'Failed to send test email',
+            details: {
+                errorMessage: error.message,
+                errorCode: error.code,
+                response: error.response,
+                processingTime: errorTime
+            }
         });
     }
 });
