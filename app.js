@@ -640,6 +640,13 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
                 console.warn('⚠️ Email configuration missing at', Date.now() - startTime, 'ms');
                 console.warn('EMAIL_USER:', process.env.EMAIL_USER ? 'SET' : 'NOT SET');
                 console.warn('EMAIL_PASS:', process.env.EMAIL_PASS ? 'SET' : 'NOT SET');
+                console.warn('❌ Cannot send verification email - environment variables not configured');
+                
+                // Log all environment variables that contain 'email' for debugging
+                const emailVars = Object.keys(process.env).filter(key => 
+                    key.toLowerCase().includes('email') || key.toLowerCase().includes('mail')
+                );
+                console.warn('🔍 Available email-related env vars:', emailVars);
             }
             
             const totalTime = Date.now() - startTime;
@@ -925,6 +932,42 @@ app.post("/register-fast", async function(req, res) {
     });
 });
 
+// Email configuration debug endpoint
+app.get('/debug-email', (req, res) => {
+    console.log('🔍 EMAIL DEBUG REQUEST');
+    
+    // Check all environment variables
+    const allEnvVars = Object.keys(process.env);
+    const emailRelatedVars = allEnvVars.filter(key => 
+        key.toLowerCase().includes('email') || 
+        key.toLowerCase().includes('mail') ||
+        key.toLowerCase().includes('smtp')
+    );
+    
+    const debugInfo = {
+        timestamp: new Date().toISOString(),
+        nodeEnv: process.env.NODE_ENV,
+        emailUser: {
+            exists: !!process.env.EMAIL_USER,
+            value: process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 5)}***` : null,
+            length: process.env.EMAIL_USER ? process.env.EMAIL_USER.length : 0
+        },
+        emailPass: {
+            exists: !!process.env.EMAIL_PASS,
+            value: process.env.EMAIL_PASS ? `[${process.env.EMAIL_PASS.length} chars]` : null,
+            length: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length : 0
+        },
+        emailRelatedVars,
+        totalEnvVars: allEnvVars.length,
+        firstTenVars: allEnvVars.slice(0, 10),
+        transporterReady: !!transporter
+    };
+    
+    console.log('📧 Email debug info:', debugInfo);
+    
+    res.json(debugInfo);
+});
+
 // Health check endpoint
 app.get('/health', async (req, res) => {
     const startTime = Date.now();
@@ -957,6 +1000,73 @@ app.get('/health', async (req, res) => {
             error: error.message,
             timestamp: new Date().toISOString(),
             responseTime: Date.now() - startTime
+        });
+    }
+});
+
+// Simple email test endpoint
+app.post('/test-email-simple', async (req, res) => {
+    const { email } = req.body;
+    console.log('🧪 SIMPLE EMAIL TEST for:', email);
+    
+    if (!email) {
+        return res.status(400).json({ error: 'Email address required' });
+    }
+    
+    try {
+        // Check configuration first
+        console.log('📧 Checking email config...');
+        console.log('EMAIL_USER:', process.env.EMAIL_USER ? 'SET' : 'NOT SET');
+        console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? 'SET' : 'NOT SET');
+        
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            return res.status(500).json({ 
+                error: 'Email configuration missing',
+                details: {
+                    EMAIL_USER: !!process.env.EMAIL_USER,
+                    EMAIL_PASS: !!process.env.EMAIL_PASS
+                }
+            });
+        }
+        
+        // Create a simple transporter for testing
+        const testTransporter = require('nodemailer').createTransporter({
+            service: 'gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS
+            }
+        });
+        
+        // Test connection
+        console.log('🔌 Testing transporter connection...');
+        await testTransporter.verify();
+        console.log('✅ Transporter verified successfully');
+        
+        // Send test email
+        console.log('📤 Sending test email...');
+        const result = await testTransporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'Test Email - Pakistan Online',
+            text: 'This is a test email from Pakistan Online. Email configuration is working!'
+        });
+        
+        console.log('✅ Test email sent:', result.messageId);
+        
+        res.json({
+            success: true,
+            message: 'Test email sent successfully',
+            messageId: result.messageId,
+            to: email
+        });
+        
+    } catch (error) {
+        console.error('❌ Email test failed:', error);
+        res.status(500).json({
+            error: 'Email test failed',
+            details: error.message,
+            code: error.code
         });
     }
 });
