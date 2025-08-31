@@ -75,7 +75,10 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false
   },
   debug: true, // Enable debug output
-  logger: true // Log information in console
+  logger: true, // Log information in console
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 5000, // 5 seconds
+  socketTimeout: 15000 // 15 seconds
 });
 
 // Test transporter configuration on startup
@@ -101,6 +104,25 @@ app.use(express.json());
 
 // Trust Railway/Proxy so secure cookies work behind HTTPS proxies
 app.set('trust proxy', 1);
+
+// Add request timeout middleware
+app.use((req, res, next) => {
+    const timeout = 60000; // 60 seconds timeout
+    const timer = setTimeout(() => {
+        if (!res.headersSent) {
+            console.error('⏰ Request timeout for:', req.method, req.url);
+            res.status(408).json({ 
+                error: 'Request timeout',
+                message: 'The request took too long to process'
+            });
+        }
+    }, timeout);
+    
+    res.on('finish', () => clearTimeout(timer));
+    res.on('close', () => clearTimeout(timer));
+    
+    next();
+});
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
@@ -140,7 +162,18 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Origin', 
+    'Accept',
+    'Cache-Control',
+    'Pragma',
+    'Expires',
+    'If-Modified-Since',
+    'If-None-Match'
+  ],
   exposedHeaders: ['Content-Length', 'X-Requested-With'],
 }));
 
@@ -227,7 +260,14 @@ app.use(passport.session());
 // The mongfooos options are the
 const mongooseOptions = {
     useNewUrlParser: true,
-    useUnifiedTopology: true
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 10000, // 10 seconds
+    socketTimeoutMS: 30000, // 30 seconds
+    connectTimeoutMS: 10000, // 10 seconds
+    maxPoolSize: 10,
+    minPoolSize: 1,
+    maxIdleTimeMS: 30000,
+    bufferMaxEntries: 0
 };
 
 if (process.env.NODE_ENV === 'production') {
@@ -495,6 +535,7 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
             console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
             console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
             console.log('EMAIL_USER value:', process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 3)}***` : 'not set');
+            console.log('All env vars:', Object.keys(process.env).filter(key => key.includes('EMAIL')));
             
             if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
                 console.log('✅ Email configuration found, preparing to send email...');
@@ -525,7 +566,14 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
                 });
                 
                 const emailStartTime = Date.now();
-                await transporter.sendMail(emailData);
+                
+                // Add timeout to email sending
+                const emailPromise = transporter.sendMail(emailData);
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Email timeout after 30 seconds')), 30000);
+                });
+                
+                await Promise.race([emailPromise, timeoutPromise]);
                 const emailEndTime = Date.now();
                 
                 console.log('✅ Verification email sent successfully at', Date.now() - startTime, 'ms');
@@ -712,7 +760,14 @@ app.post('/resend-verification', async (req, res) => {
             });
             
             const emailStartTime = Date.now();
-            await transporter.sendMail(emailData);
+            
+            // Add timeout to email sending
+            const emailPromise = transporter.sendMail(emailData);
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Email timeout after 30 seconds')), 30000);
+            });
+            
+            await Promise.race([emailPromise, timeoutPromise]);
             const emailEndTime = Date.now();
             
             console.log('✅ Verification email resent successfully at', Date.now() - startTime, 'ms');
@@ -758,6 +813,42 @@ app.post('/resend-verification', async (req, res) => {
                 processingTime: errorTime,
                 errorMessage: error.message
             } : undefined
+        });
+    }
+});
+
+// Health check endpoint
+app.get('/health', async (req, res) => {
+    const startTime = Date.now();
+    console.log('🩺 Health check requested at', new Date().toISOString());
+    
+    try {
+        // Check database connection
+        const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+        
+        // Check email configuration
+        const emailConfigured = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+        
+        const healthData = {
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            database: dbStatus,
+            emailConfigured,
+            environment: process.env.NODE_ENV || 'development',
+            responseTime: Date.now() - startTime
+        };
+        
+        console.log('✅ Health check completed:', healthData);
+        res.status(200).json(healthData);
+        
+    } catch (error) {
+        console.error('❌ Health check failed:', error);
+        res.status(500).json({
+            status: 'unhealthy',
+            error: error.message,
+            timestamp: new Date().toISOString(),
+            responseTime: Date.now() - startTime
         });
     }
 });
