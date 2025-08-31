@@ -337,8 +337,13 @@ app.get('/register', function(req, res) {
 
 // Register API route
 app.post("/register", upload.single('profileImage'), async function(req, res) {
+    console.log('🔥 REGISTRATION REQUEST RECEIVED');
+    console.log('📝 Request headers:', req.headers);
+    console.log('📝 Request body:', req.body);
+    console.log('📁 Request file:', req.file);
+    
     const { password, confirmPassword, email, fullName, mobile } = req.body;
-    console.log('Register request body:', req.body); // Log incoming data
+    console.log('🧩 Extracted fields:', { password: !!password, confirmPassword: !!confirmPassword, email, fullName, mobile });
     
     // Validation
     if (!password || !confirmPassword || !email || !fullName || !mobile) {
@@ -1632,7 +1637,10 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(uploadsDir));
 
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`📧 Email configured: ${process.env.EMAIL_USER ? 'YES' : 'NO'}`);
+  console.log(`💾 MongoDB URL: ${process.env.MONGODB_URI ? 'SET' : 'NOT SET'}`);
+  console.log(`🔗 API endpoints available at: http://localhost:${PORT}`);
 });
 
 // Test endpoint to check entity approval status
