@@ -435,14 +435,33 @@ app.get('/verify-email', async (req, res) => {
     if (!token) {
         return res.redirect('/login?error=Invalid or missing verification token.');
     }
-    const user = await User.findOne({ verificationToken: token });
-    if (!user) {
-        return res.redirect('/login?error=Invalid or expired verification token.');
+    
+    try {
+        const user = await User.findOne({ verificationToken: token });
+        if (!user) {
+            return res.redirect('/login?error=Invalid or expired verification token.');
+        }
+        
+        // Mark user as verified
+        user.verified = true;
+        user.verificationToken = undefined;
+        await user.save();
+        
+        // Log the user in automatically
+        req.logIn(user, function(err) {
+            if (err) {
+                console.error('Auto-login after verification failed:', err);
+                return res.redirect('/login?success=Email verified! Please log in to continue.');
+            }
+            
+            // Redirect to frontend with success message
+            const frontendUrl = process.env.FRONTEND_URL || 'https://nexus-frontend-4sr8.onrender.com' || 'http://localhost:5173';
+            return res.redirect(`${frontendUrl}/?verified=true&message=Email verified and logged in successfully!`);
+        });
+    } catch (error) {
+        console.error('Email verification error:', error);
+        return res.redirect('/login?error=Verification failed. Please try again.');
     }
-    user.verified = true;
-    user.verificationToken = undefined;
-    await user.save();
-    res.redirect('/login?success=Email verified! You can now log in.');
 });
 
 // Login API route
