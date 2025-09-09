@@ -117,7 +117,7 @@ if (process.env.EMAIL_SERVICE === 'sendgrid') {
 }
 
 // Add common configuration options
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   ...transporterConfig,
   debug: process.env.NODE_ENV === 'development', // Enable debug in development
   logger: process.env.NODE_ENV === 'development', // Log information in development
@@ -624,8 +624,17 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
         });
         
         try {
-            console.log('⏱️ Step 5: Starting email verification process at', Date.now() - startTime, 'ms');
+            console.log('⏱️ Step 5: Email verification DISABLED for testing at', Date.now() - startTime, 'ms');
+            console.log('🚫 Skipping email verification - user will be auto-verified');
             
+            // Auto-verify user for testing (disable email verification)
+            user.verified = true;
+            user.verificationToken = undefined; // Remove verification token
+            await user.save();
+            console.log('✅ User auto-verified for testing purposes');
+            
+            // COMMENTED OUT: Email verification process
+            /*
             // Send verification email
             const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
             console.log('🔗 Generated verification URL:', verifyUrl);
@@ -637,6 +646,8 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
             
             let emailConfigValid = false;
             
+            // DISABLED FOR TESTING: Email verification process
+            /*
             if (emailService === 'sendgrid') {
                 emailConfigValid = !!process.env.SENDGRID_API_KEY;
                 console.log('SENDGRID_API_KEY exists:', emailConfigValid);
@@ -734,19 +745,20 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
                 );
                 console.warn('🔍 Available email-related env vars:', emailVars);
             }
+            */
             
             const totalTime = Date.now() - startTime;
             console.log('🎉 Registration process completed successfully at', totalTime, 'ms');
             
             return res.status(201).json({ 
                 success: true, 
-                message: emailConfigValid 
-                    ? 'Registration successful! Check your email for verification link.'
-                    : 'Registration successful! Email verification temporarily unavailable.',
+                message: 'Registration successful! User auto-verified for testing.',
+                userId: user._id,
+                verified: true,
                 debug: process.env.NODE_ENV === 'development' ? {
                     processingTime: totalTime,
-                    emailConfigured: emailConfigValid,
-                    emailService: emailService
+                    emailVerificationDisabled: true,
+                    autoVerified: true
                 } : undefined
             });
         } catch (emailError) {
@@ -836,14 +848,47 @@ app.post("/login", function(req, res, next) {
     })(req, res, next);
 });
 
-// Resend verification email
+// Resend verification email - DISABLED FOR TESTING
 app.post('/resend-verification', async (req, res) => {
     const startTime = Date.now();
     console.log('🔄 RESEND VERIFICATION REQUEST RECEIVED AT:', new Date().toISOString());
+    console.log('🚫 RESEND VERIFICATION DISABLED FOR TESTING');
     
     const { email } = req.body;
     console.log('📧 Resend verification requested for email:', email);
     
+    if (!email) {
+        console.log('❌ Resend verification failed: Email is required');
+        return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    // Auto-verify user instead of sending email
+    try {
+        const user = await User.findOne({ email: email });
+        
+        if (!user) {
+            console.log('❌ User not found for email:', email);
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        if (!user.verified) {
+            user.verified = true;
+            user.verificationToken = undefined;
+            await user.save();
+            console.log('✅ User auto-verified for testing:', email);
+        }
+        
+        return res.status(200).json({ 
+            success: true, 
+            message: 'User auto-verified for testing purposes.',
+            verified: true
+        });
+    } catch (error) {
+        console.error('❌ Error auto-verifying user:', error);
+        return res.status(500).json({ error: 'Failed to auto-verify user' });
+    }
+    
+    /* DISABLED EMAIL VERIFICATION CODE:
     if (!email) {
         console.log('❌ Resend verification failed: Email is required');
         return res.status(400).json({ error: 'Email is required' });
@@ -1013,6 +1058,7 @@ app.post('/resend-verification', async (req, res) => {
             } : undefined
         });
     }
+    */ // END OF COMMENTED OUT EMAIL VERIFICATION CODE
 });
 
 // Fast registration endpoint (without file upload for testing)
@@ -1164,7 +1210,7 @@ app.post('/test-email-simple', async (req, res) => {
         }
         
         // Create a simple transporter for testing
-        const testTransporter = require('nodemailer').createTransporter({
+        const testTransporter = require('nodemailer').createTransport({
             service: 'gmail',
             auth: {
                 user: process.env.EMAIL_USER,
