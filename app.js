@@ -411,15 +411,25 @@ passport.use(new LocalStrategy({
         }
         
         console.log('✅ User found:', user.username, 'Verifying password...');
+        console.log('🔍 User object keys:', Object.keys(user.toObject()));
+        console.log('🔍 User has authenticate method:', typeof user.authenticate);
         
-        const isPasswordValid = await user.authenticate(password);
-        if (!isPasswordValid) {
-            console.log('❌ Password verification failed for user:', user.username);
+        // Try the authenticate method
+        try {
+            const isPasswordValid = await user.authenticate(password);
+            console.log('🔍 Password validation result:', isPasswordValid);
+            
+            if (!isPasswordValid) {
+                console.log('❌ Password verification failed for user:', user.username);
+                return done(null, false, { message: 'Invalid username or password' });
+            }
+            
+            console.log('✅ Password verified successfully for user:', user.username);
+            return done(null, user);
+        } catch (authError) {
+            console.error('❌ Authentication method error:', authError);
             return done(null, false, { message: 'Invalid username or password' });
         }
-        
-        console.log('✅ Password verified successfully for user:', user.username);
-        return done(null, user);
     } catch (err) {
         console.error('❌ Passport authentication error:', err);
         return done(err);

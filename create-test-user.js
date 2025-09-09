@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const Users = require('./models/User');
+const User = require('./models/User');
 require('dotenv').config();
 
 async function createTestUser() {
@@ -9,7 +9,7 @@ async function createTestUser() {
     console.log('Connected to MongoDB');
 
     // Check if test user already exists
-    const existingUser = await Users.findOne({ email: 'test@example.com' });
+    const existingUser = await User.findOne({ email: 'test@example.com' });
     if (existingUser) {
       console.log('Test user already exists:', existingUser.email);
       return;

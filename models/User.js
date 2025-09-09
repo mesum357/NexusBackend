@@ -22,7 +22,10 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Add plugins
-userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(passportLocalMongoose, {
+  usernameField: 'username',
+  passwordField: 'password'
+});
 userSchema.plugin(findOrCreate);
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);
