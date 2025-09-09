@@ -287,9 +287,10 @@ app.use(session({
   proxy: isProduction,
   cookie: {
     httpOnly: true,
-    secure: isProduction, // required for SameSite=None
-    sameSite: isProduction ? 'none' : 'lax',
+    secure: false, // Set to false for localhost development
+    sameSite: 'lax', // Set to 'lax' for localhost development
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    domain: 'localhost', // Explicitly set domain for localhost
   },
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI || 'mongodb+srv://ahmed357:pDliM118811@cluster0.vtangzf.mongodb.net/',
@@ -853,6 +854,9 @@ app.post("/login", function(req, res, next) {
             if (err) {
                 return res.status(500).json({ error: 'Internal server error' });
             }
+            console.log('✅ Login successful, session established');
+            console.log('Session ID:', req.sessionID);
+            console.log('User authenticated:', req.isAuthenticated());
             return res.status(200).json({ success: true, message: 'Login successful', user: { id: user._id, email: user.email, username: user.username } });
         });
     })(req, res, next);
@@ -1392,6 +1396,13 @@ app.get('/logout', function(req, res, next) {
 });
 const abcv = 45
 app.get('/me', (req, res) => {
+  console.log('🔍 /me endpoint called');
+  console.log('req.isAuthenticated():', req.isAuthenticated());
+  console.log('req.user:', req.user);
+  console.log('req.session:', req.session);
+  console.log('req.sessionID:', req.sessionID);
+  console.log('req.headers.cookie:', req.headers.cookie);
+  
   if (req.isAuthenticated()) {
     res.json({ user: req.user });
   } else {
