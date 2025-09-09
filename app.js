@@ -185,6 +185,8 @@ app.use(cors({
       'http://localhost:8082', // Frontend dev
       'https://pakistanonlines.com',
       'http://pakistanonlines.com',
+      'https://www.pakistanonlines.com', // Production frontend with www
+      'http://www.pakistanonlines.com', // Production frontend with www (HTTP)
       'https://nexus-frontend-4sr8.onrender.com', // Nexus Frontend on Render
       'https://nexus-frontend-production-5300.up.railway.app', // Nexus Frontend on Railway
       'https://nexusadminpanel-production.up.railway.app' // Admin Panel on Railway
@@ -199,6 +201,7 @@ app.use(cors({
     if (allowedOrigins.includes(origin) || 
         origin.endsWith('.railway.app') || 
         origin.endsWith('.up.railway.app')) {
+      console.log('✅ CORS allowed for origin:', origin);
       return callback(null, true);
     }
     
@@ -217,9 +220,11 @@ app.use(cors({
     'Pragma',
     'Expires',
     'If-Modified-Since',
-    'If-None-Match'
+    'If-None-Match',
+    'Cookie',
+    'Set-Cookie'
   ],
-  exposedHeaders: ['Content-Length', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Requested-With', 'Set-Cookie'],
 }));
 
 // Handle preflight requests
@@ -287,10 +292,10 @@ app.use(session({
   proxy: isProduction,
   cookie: {
     httpOnly: true,
-    secure: false, // Set to false for localhost development
-    sameSite: 'lax', // Set to 'lax' for localhost development
+    secure: isProduction, // required for SameSite=None
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-    domain: 'localhost', // Explicitly set domain for localhost
+    domain: isProduction ? undefined : undefined, // Let browser handle domain for cross-origin
   },
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI || 'mongodb+srv://ahmed357:pDliM118811@cluster0.vtangzf.mongodb.net/',
@@ -854,9 +859,6 @@ app.post("/login", function(req, res, next) {
             if (err) {
                 return res.status(500).json({ error: 'Internal server error' });
             }
-            console.log('✅ Login successful, session established');
-            console.log('Session ID:', req.sessionID);
-            console.log('User authenticated:', req.isAuthenticated());
             return res.status(200).json({ success: true, message: 'Login successful', user: { id: user._id, email: user.email, username: user.username } });
         });
     })(req, res, next);
@@ -1397,24 +1399,35 @@ app.get('/logout', function(req, res, next) {
 const abcv = 45
 app.get('/me', (req, res) => {
   console.log('🔍 /me endpoint called');
-  console.log('req.isAuthenticated():', req.isAuthenticated());
-  console.log('req.user:', req.user);
-  console.log('req.session:', req.session);
-  console.log('req.sessionID:', req.sessionID);
-  console.log('req.headers.cookie:', req.headers.cookie);
+  console.log('🔍 Request headers:', req.headers);
+  console.log('🔍 Session ID:', req.sessionID);
+  console.log('🔍 Session data:', req.session);
+  console.log('🔍 Is authenticated:', req.isAuthenticated());
+  console.log('🔍 User:', req.user);
   
   if (req.isAuthenticated()) {
+    console.log('✅ User authenticated, returning user data');
     res.json({ user: req.user });
   } else {
+    console.log('❌ User not authenticated, returning 401');
     res.status(401).json({ error: 'Not authenticated' });
   }
 });
 
 // Add the /api/auth/me endpoint that the frontend expects
 app.get('/api/auth/me', (req, res) => {
+  console.log('🔍 /api/auth/me endpoint called');
+  console.log('🔍 Request headers:', req.headers);
+  console.log('🔍 Session ID:', req.sessionID);
+  console.log('🔍 Session data:', req.session);
+  console.log('🔍 Is authenticated:', req.isAuthenticated());
+  console.log('🔍 User:', req.user);
+  
   if (req.isAuthenticated()) {
+    console.log('✅ User authenticated, returning user data');
     res.json({ user: req.user });
   } else {
+    console.log('❌ User not authenticated, returning 401');
     res.status(401).json({ error: 'Not authenticated' });
   }
 });
