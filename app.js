@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 require('dotenv').config();
 console.log('🚀 Server starting with environment:', process.env.NODE_ENV || 'development');
 console.log('🌐 FRONTEND_URL:', process.env.FRONTEND_URL || 'not set');
@@ -2652,6 +2652,16 @@ if (!fs.existsSync(uploadsDir)) {
 
 // Serve uploaded files
 app.use('/uploads', express.static(uploadsDir));
+
+// Health check endpoint for Railway
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Pakistan Online Backend is running',
+    timestamp: new Date().toISOString(),
+    port: PORT
+  });
+});
 
 server.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
