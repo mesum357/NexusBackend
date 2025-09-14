@@ -2655,11 +2655,21 @@ app.use('/uploads', express.static(uploadsDir));
 
 // Health check endpoint for Railway
 app.get('/', (req, res) => {
-  res.json({ 
+  res.status(200).json({ 
     status: 'OK', 
     message: 'Pakistan Online Backend is running',
     timestamp: new Date().toISOString(),
-    port: PORT
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Additional health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
   });
 });
 
