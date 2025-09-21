@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
   bio: { type: String },
   website: { type: String },
   googleId: { type: String }, // for Google OAuth
-  verified: { type: Boolean, default: false },
+  verified: { type: Boolean, default: true },
   verificationToken: { type: String },
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
