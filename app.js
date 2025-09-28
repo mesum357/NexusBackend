@@ -112,7 +112,8 @@ app.use(cors({
       'http://www.pakistanonlines.com', // Production frontend with www (HTTP)
       'https://nexus-frontend-4sr8.onrender.com', // Nexus Frontend on Render
       'https://nexus-frontend-production-5300.up.railway.app', // Nexus Frontend on Railway
-      'https://nexusadminpanel-production.up.railway.app' // Admin Panel on Railway
+      'https://nexusadminpanel-production.up.railway.app', // Admin Panel on Railway
+      'https://edunia.org' // Edunia website
     ];
     
     // Add environment-specific origins
@@ -514,7 +515,7 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
         console.log('📸 No profile image uploaded');
     }
     
-        console.log('✅ User data prepared at', Date.now() - startTime, 'ms:', {
+    console.log('✅ User data prepared at', Date.now() - startTime, 'ms:', {
         username: userData.username,
         email: userData.email,
         fullName: userData.fullName,
@@ -560,16 +561,16 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
         });
         
         // Email disabled: directly return success with verified user
-        const totalTime = Date.now() - startTime;
+            const totalTime = Date.now() - startTime;
         console.log('🎉 Registration completed (email disabled) at', totalTime, 'ms');
-        return res.status(201).json({ 
-            success: true, 
+            return res.status(201).json({ 
+                success: true, 
             message: 'Registration successful!',
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                fullName: user.fullName,
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    fullName: user.fullName,
                 verified: true
             }
         });
