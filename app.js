@@ -111,6 +111,7 @@ app.use(cors({
       'https://www.pakistanonlines.com', // Production frontend with www
       'http://www.pakistanonlines.com', // Production frontend with www (HTTP)
       'https://nexus-frontend-4sr8.onrender.com', // Nexus Frontend on Render
+      'https://nexus-frontend-3dcx.onrender.com', // Nexus Frontend on Render (current)
       'https://nexus-frontend-production-5300.up.railway.app', // Nexus Frontend on Railway
       'https://nexusadminpanel-production.up.railway.app', // Admin Panel on Railway
       'https://edunia.org' // Edunia website
@@ -121,10 +122,16 @@ app.use(cors({
       allowedOrigins.push(process.env.FRONTEND_URL);
     }
     
+    // Add Control Panel URL from environment
+    if (process.env.CONTROL_PANEL_URL) {
+      allowedOrigins.push(process.env.CONTROL_PANEL_URL);
+    }
+    
     // Check if origin is allowed
     if (allowedOrigins.includes(origin) || 
         origin.endsWith('.railway.app') || 
-        origin.endsWith('.up.railway.app')) {
+        origin.endsWith('.up.railway.app') ||
+        origin.endsWith('.onrender.com')) { // Allow all Render URLs
       console.log('✅ CORS allowed for origin:', origin);
       return callback(null, true);
     }
@@ -167,13 +174,19 @@ app.use((req, res, next) => {
     'http://localhost:8083',
     'http://localhost:8082',
     'https://pakistanonlines.com',
-    'http://pakistanonlines.com'
+    'http://pakistanonlines.com',
+    'https://nexus-frontend-3dcx.onrender.com', // Nexus Frontend on Render (current)
+    'https://nexus-frontend-4sr8.onrender.com' // Nexus Frontend on Render
   ];
   
   // Add environment-specific origins
   if (process.env.FRONTEND_URL) {
     allowedOrigins.push(process.env.FRONTEND_URL);
-    
+  }
+  
+  // Add Control Panel URL from environment
+  if (process.env.CONTROL_PANEL_URL) {
+    allowedOrigins.push(process.env.CONTROL_PANEL_URL);
   }
   
   // For Railway deployment, be more permissive with localhost origins
@@ -184,6 +197,7 @@ app.use((req, res, next) => {
   if (origin && (allowedOrigins.includes(origin) || 
       origin.endsWith('.railway.app') || 
       origin.endsWith('.up.railway.app') ||
+      origin.endsWith('.onrender.com') || // Allow all Render URLs
       (isRailway && isLocalhost))) {
     res.header('Access-Control-Allow-Origin', origin);
     console.log('✅ CORS allowed for origin:', origin);
