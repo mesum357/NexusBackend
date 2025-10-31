@@ -173,6 +173,7 @@ app.use((req, res, next) => {
   // Add environment-specific origins
   if (process.env.FRONTEND_URL) {
     allowedOrigins.push(process.env.FRONTEND_URL);
+    
   }
   
   // For Railway deployment, be more permissive with localhost origins
@@ -281,16 +282,12 @@ mongoose.connect(mongoURI, mongooseOptions)
         });
         console.error("Full error:", err);
         
-        // Don't exit in production, continue without DB for debugging
-        if (process.env.NODE_ENV !== 'production') {
-            process.exit(1);
-        } else {
-            console.warn("⚠️ Continuing without database connection in production mode");
-        }
+        // Do not exit; keep server running and let routes guard against missing DB
+        console.warn("⚠️ Continuing without database connection; API will return 503 until DB connects");
     });
 
 // Configure Mongoose settings
-mongoose.set('bufferCommands', false); // Disable mongoose buffering
+mongoose.set('bufferCommands', true); // Enable buffering to avoid early query errors during startup
 
 // Add connection event listeners
 mongoose.connection.on('connected', () => {

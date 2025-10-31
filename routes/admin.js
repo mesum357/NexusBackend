@@ -306,6 +306,16 @@ router.put('/product/:id/approval', async (req, res) => {
   }
 });
 
+const mongoose = require('mongoose');
+
+// Guard: ensure DB connection is ready for admin endpoints
+router.use((req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ error: 'Database not connected. Please try again shortly.' });
+  }
+  next();
+});
+
 // Get all payment requests for admin review (no authentication required for admin panel)
 router.get('/payment-requests', async (req, res) => {
   try {
