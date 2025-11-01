@@ -621,6 +621,89 @@ router.delete('/user/:id', async (req, res) => {
   }
 });
 
+// Get all shops for admin management (no authentication required for admin panel)
+router.get('/shops', async (req, res) => {
+  try {
+    const shops = await Shop.find({}).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
+    res.json({ shops });
+  } catch (error) {
+    console.error('Error fetching shops:', error);
+    res.status(500).json({ error: 'Failed to fetch shops' });
+  }
+});
+
+// Freeze a shop (no authentication required for admin panel)
+router.put('/shop/:id/freeze', async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.id);
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    shop.isFrozen = true;
+    await shop.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Shop frozen successfully',
+      shop: {
+        id: shop._id,
+        shopName: shop.shopName,
+        isFrozen: shop.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error freezing shop:', error);
+    res.status(500).json({ error: 'Failed to freeze shop' });
+  }
+});
+
+// Unfreeze a shop (no authentication required for admin panel)
+router.put('/shop/:id/unfreeze', async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.id);
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    shop.isFrozen = false;
+    await shop.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Shop unfrozen successfully',
+      shop: {
+        id: shop._id,
+        shopName: shop.shopName,
+        isFrozen: shop.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error unfreezing shop:', error);
+    res.status(500).json({ error: 'Failed to unfreeze shop' });
+  }
+});
+
+// Delete a shop (no authentication required for admin panel)
+router.delete('/shop/:id', async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.id);
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    await Shop.findByIdAndDelete(req.params.id);
+
+    res.json({ 
+      success: true, 
+      message: 'Shop deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting shop:', error);
+    res.status(500).json({ error: 'Failed to delete shop' });
+  }
+});
+
 // Update admin profile (disabled - no authentication system)
 // router.put('/profile', async (req, res) => { ... });
 

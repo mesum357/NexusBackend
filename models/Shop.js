@@ -46,6 +46,9 @@ const shopSchema = new mongoose.Schema({
   approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Admin who approved/rejected
   approvedAt: { type: Date }, // When it was approved/rejected
   
+  // Freeze Status
+  isFrozen: { type: Boolean, default: false }, // Admin can freeze shops to hide them from store page
+  
   // Owner information
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   ownerName: { type: String, default: '' },

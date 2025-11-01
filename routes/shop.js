@@ -92,7 +92,8 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
 // Get all shops
 router.get('/all', async (req, res) => {
   try {
-    const shops = await Shop.find({ approvalStatus: 'approved' }).sort({ createdAt: -1 }); // Only show approved shops
+    // Only show approved shops that are not frozen
+    const shops = await Shop.find({ approvalStatus: 'approved', isFrozen: { $ne: true } }).sort({ createdAt: -1 });
     console.log('Found shops:', shops.length);
     
     // Process each shop's products to ensure image fields are properly populated
