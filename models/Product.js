@@ -23,6 +23,7 @@ const productSchema = new mongoose.Schema({
   approvalNotes: { type: String }, // Admin notes for approval/rejection
   approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Admin who approved/rejected
   approvedAt: { type: Date }, // When it was approved/rejected
+  isFrozen: { type: Boolean, default: false }, // Admin can freeze products to hide them from marketplace
   tags: [{ type: String }],
   specifications: { type: Map, of: String }, // For additional product details
   contactPreference: { type: String, enum: ['phone', 'email', 'both'], default: 'both' }

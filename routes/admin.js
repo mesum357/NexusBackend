@@ -632,6 +632,39 @@ router.get('/shops', async (req, res) => {
   }
 });
 
+// Get all hospitals for admin management (no authentication required for admin panel)
+router.get('/hospitals', async (req, res) => {
+  try {
+    const hospitals = await Hospital.find({}).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
+    res.json({ hospitals });
+  } catch (error) {
+    console.error('Error fetching hospitals:', error);
+    res.status(500).json({ error: 'Failed to fetch hospitals' });
+  }
+});
+
+// Get all institutes for admin management (no authentication required for admin panel)
+router.get('/institutes', async (req, res) => {
+  try {
+    const institutes = await Institute.find({}).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
+    res.json({ institutes });
+  } catch (error) {
+    console.error('Error fetching institutes:', error);
+    res.status(500).json({ error: 'Failed to fetch institutes' });
+  }
+});
+
+// Get all products for admin management (no authentication required for admin panel)
+router.get('/products', async (req, res) => {
+  try {
+    const products = await Product.find({}).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
+    res.json({ products });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({ error: 'Failed to fetch products' });
+  }
+});
+
 // Freeze a shop (no authentication required for admin panel)
 router.put('/shop/:id/freeze', async (req, res) => {
   try {
@@ -684,6 +717,162 @@ router.put('/shop/:id/unfreeze', async (req, res) => {
   }
 });
 
+// Freeze a hospital (no authentication required for admin panel)
+router.put('/hospital/:id/freeze', async (req, res) => {
+  try {
+    const hospital = await Hospital.findById(req.params.id);
+    if (!hospital) {
+      return res.status(404).json({ error: 'Hospital not found' });
+    }
+
+    hospital.isFrozen = true;
+    await hospital.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Hospital frozen successfully',
+      hospital: {
+        id: hospital._id,
+        name: hospital.name,
+        isFrozen: hospital.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error freezing hospital:', error);
+    res.status(500).json({ error: 'Failed to freeze hospital' });
+  }
+});
+
+// Unfreeze a hospital (no authentication required for admin panel)
+router.put('/hospital/:id/unfreeze', async (req, res) => {
+  try {
+    const hospital = await Hospital.findById(req.params.id);
+    if (!hospital) {
+      return res.status(404).json({ error: 'Hospital not found' });
+    }
+
+    hospital.isFrozen = false;
+    await hospital.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Hospital unfrozen successfully',
+      hospital: {
+        id: hospital._id,
+        name: hospital.name,
+        isFrozen: hospital.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error unfreezing hospital:', error);
+    res.status(500).json({ error: 'Failed to unfreeze hospital' });
+  }
+});
+
+// Freeze an institute (no authentication required for admin panel)
+router.put('/institute/:id/freeze', async (req, res) => {
+  try {
+    const institute = await Institute.findById(req.params.id);
+    if (!institute) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+
+    institute.isFrozen = true;
+    await institute.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Institute frozen successfully',
+      institute: {
+        id: institute._id,
+        name: institute.name,
+        isFrozen: institute.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error freezing institute:', error);
+    res.status(500).json({ error: 'Failed to freeze institute' });
+  }
+});
+
+// Unfreeze an institute (no authentication required for admin panel)
+router.put('/institute/:id/unfreeze', async (req, res) => {
+  try {
+    const institute = await Institute.findById(req.params.id);
+    if (!institute) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+
+    institute.isFrozen = false;
+    await institute.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Institute unfrozen successfully',
+      institute: {
+        id: institute._id,
+        name: institute.name,
+        isFrozen: institute.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error unfreezing institute:', error);
+    res.status(500).json({ error: 'Failed to unfreeze institute' });
+  }
+});
+
+// Freeze a product (no authentication required for admin panel)
+router.put('/product/:id/freeze', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    product.isFrozen = true;
+    await product.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Product frozen successfully',
+      product: {
+        id: product._id,
+        title: product.title,
+        isFrozen: product.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error freezing product:', error);
+    res.status(500).json({ error: 'Failed to freeze product' });
+  }
+});
+
+// Unfreeze a product (no authentication required for admin panel)
+router.put('/product/:id/unfreeze', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    product.isFrozen = false;
+    await product.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Product unfrozen successfully',
+      product: {
+        id: product._id,
+        title: product.title,
+        isFrozen: product.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error unfreezing product:', error);
+    res.status(500).json({ error: 'Failed to unfreeze product' });
+  }
+});
+
 // Delete a shop (no authentication required for admin panel)
 router.delete('/shop/:id', async (req, res) => {
   try {
@@ -701,6 +890,66 @@ router.delete('/shop/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting shop:', error);
     res.status(500).json({ error: 'Failed to delete shop' });
+  }
+});
+
+// Delete a hospital (no authentication required for admin panel)
+router.delete('/hospital/:id', async (req, res) => {
+  try {
+    const hospital = await Hospital.findById(req.params.id);
+    if (!hospital) {
+      return res.status(404).json({ error: 'Hospital not found' });
+    }
+
+    await Hospital.findByIdAndDelete(req.params.id);
+
+    res.json({ 
+      success: true, 
+      message: 'Hospital deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting hospital:', error);
+    res.status(500).json({ error: 'Failed to delete hospital' });
+  }
+});
+
+// Delete an institute (no authentication required for admin panel)
+router.delete('/institute/:id', async (req, res) => {
+  try {
+    const institute = await Institute.findById(req.params.id);
+    if (!institute) {
+      return res.status(404).json({ error: 'Institute not found' });
+    }
+
+    await Institute.findByIdAndDelete(req.params.id);
+
+    res.json({ 
+      success: true, 
+      message: 'Institute deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting institute:', error);
+    res.status(500).json({ error: 'Failed to delete institute' });
+  }
+});
+
+// Delete a product (no authentication required for admin panel)
+router.delete('/product/:id', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    await Product.findByIdAndDelete(req.params.id);
+
+    res.json({ 
+      success: true, 
+      message: 'Product deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    res.status(500).json({ error: 'Failed to delete product' });
   }
 });
 

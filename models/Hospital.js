@@ -68,6 +68,7 @@ const hospitalSchema = new mongoose.Schema({
   approvalNotes: { type: String }, // Admin notes for approval/rejection
   approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Admin who approved/rejected
   approvedAt: { type: Date }, // When it was approved/rejected
+  isFrozen: { type: Boolean, default: false }, // Admin can freeze hospitals to hide them from hospital page
   
   // Ratings and Reviews
   rating: { type: Number, default: 4.5 },
