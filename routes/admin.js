@@ -545,6 +545,82 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// Freeze a user (no authentication required for admin panel)
+router.put('/user/:id/freeze', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    user.isFrozen = true;
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'User frozen successfully',
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isFrozen: user.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error freezing user:', error);
+    res.status(500).json({ error: 'Failed to freeze user' });
+  }
+});
+
+// Unfreeze a user (no authentication required for admin panel)
+router.put('/user/:id/unfreeze', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    user.isFrozen = false;
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'User unfrozen successfully',
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isFrozen: user.isFrozen
+      }
+    });
+  } catch (error) {
+    console.error('Error unfreezing user:', error);
+    res.status(500).json({ error: 'Failed to unfreeze user' });
+  }
+});
+
+// Delete a user (no authentication required for admin panel)
+router.delete('/user/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Delete user and all associated data
+    // Note: You may want to add cascading deletes for related entities
+    await User.findByIdAndDelete(req.params.id);
+
+    res.json({ 
+      success: true, 
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 // Update admin profile (disabled - no authentication system)
 // router.put('/profile', async (req, res) => { ... });
 

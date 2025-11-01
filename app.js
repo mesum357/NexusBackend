@@ -604,6 +604,10 @@ app.post("/login", function(req, res, next) {
         if (!user) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
+        // Check if user is frozen
+        if (user.isFrozen) {
+            return res.status(403).json({ error: 'This account is frozen. Please contact support.' });
+        }
         // Email verification disabled: allow login regardless of verified flag
         req.logIn(user, function(err) {
             if (err) {
@@ -1462,6 +1466,12 @@ app.post('/api/auth/login', function(req, res, next) {
         }
         
         console.log('✅ Passport authentication successful for user:', user.username);
+        
+        // Check if user is frozen
+        if (user.isFrozen) {
+            console.log('❌ User account is frozen:', user.username);
+            return res.status(403).json({ error: 'This account is frozen. Please contact support.' });
+        }
         
         // In development, allow unverified users to login
         if (!user.verified && process.env.NODE_ENV !== 'development') {

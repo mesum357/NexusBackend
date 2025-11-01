@@ -18,7 +18,8 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpires: { type: Date },
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  isAdmin: { type: Boolean, default: false } // Admin role for entity approval
+  isAdmin: { type: Boolean, default: false }, // Admin role for entity approval
+  isFrozen: { type: Boolean, default: false } // User freeze status
 }, { timestamps: true });
 
 // Add plugins
