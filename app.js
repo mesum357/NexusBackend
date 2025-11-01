@@ -1696,18 +1696,44 @@ app.get('/', (req, res) => {
 });
 
 // Image upload endpoint for wizard
-app.post('/api/upload/image', upload.single('image'), async (req, res) => {
+app.post('/api/upload/image', (req, res, next) => {
+  console.log('🖼️ Image upload request received');
+  console.log('   - Content-Type:', req.headers['content-type']);
+  console.log('   - Content-Length:', req.headers['content-length']);
+  next();
+}, (req, res, next) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      console.error('❌ Multer upload error:', err);
+      console.error('   - Error message:', err.message);
+      console.error('   - Error code:', err.code);
+      return res.status(500).json({ 
+        error: 'File upload failed', 
+        details: err.message 
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
-    console.log('🖼️ Image upload request received');
+    console.log('🖼️ Image upload handler executing');
     console.log('   - File:', req.file);
-    console.log('   - File path:', req.file?.path);
-    console.log('   - File URL:', req.file?.url);
-    console.log('   - File secure URL:', req.file?.secure_url);
+    console.log('   - File exists:', !!req.file);
     
     if (!req.file) {
       console.error('❌ No image file provided');
+      console.error('   - Request body keys:', Object.keys(req.body || {}));
+      console.error('   - Request files:', req.files);
       return res.status(400).json({ error: 'No image file provided' });
     }
+
+    console.log('   - File path:', req.file?.path);
+    console.log('   - File URL:', req.file?.url);
+    console.log('   - File secure URL:', req.file?.secure_url);
+    console.log('   - File fieldname:', req.file?.fieldname);
+    console.log('   - File originalname:', req.file?.originalname);
+    console.log('   - File mimetype:', req.file?.mimetype);
+    console.log('   - File size:', req.file?.size);
 
     // Determine the final image URL
     let imageUrl = req.file.path; // Default to path
@@ -1721,9 +1747,18 @@ app.post('/api/upload/image', upload.single('image'), async (req, res) => {
     } else if (req.file.path) {
       imageUrl = req.file.path; // Fallback to path
       console.log('   - ✅ Using file path');
+    } else {
+      console.error('❌ No valid URL found in file object');
+      console.error('   - File object keys:', Object.keys(req.file || {}));
+      return res.status(500).json({ error: 'Failed to get image URL from upload' });
     }
     
     console.log('   - Final imageUrl:', imageUrl);
+    
+    if (!imageUrl || !imageUrl.includes('res.cloudinary.com')) {
+      console.error('❌ Invalid imageUrl:', imageUrl);
+      return res.status(500).json({ error: 'Invalid image URL returned from upload' });
+    }
     
     res.json({
       success: true,
@@ -1732,7 +1767,13 @@ app.post('/api/upload/image', upload.single('image'), async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error uploading image:', error);
-    res.status(500).json({ error: 'Failed to upload image' });
+    console.error('   - Error name:', error.name);
+    console.error('   - Error message:', error.message);
+    console.error('   - Error stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Failed to upload image',
+      details: error.message 
+    });
   }
 });
 

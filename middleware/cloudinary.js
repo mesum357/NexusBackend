@@ -3,11 +3,38 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 // Configure Cloudinary
+console.log('🔧 Configuring Cloudinary...');
+console.log('   Cloud name:', process.env.CLOUDINARY_CLOUD_NAME || 'NOT SET');
+console.log('   API key:', process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT SET');
+console.log('   API secret:', process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET');
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// Test Cloudinary configuration immediately
+console.log('🔍 Testing Cloudinary configuration...');
+const testCloudinaryConnection = async () => {
+  try {
+    await cloudinary.api.ping();
+    console.log('✅ Cloudinary ping successful - account is active');
+    console.log('   Cloud name:', cloudinary.config().cloud_name);
+  } catch (error) {
+    console.error('❌ Cloudinary ping FAILED!');
+    console.error('   Cloud name:', cloudinary.config().cloud_name);
+    console.error('   Error:', error.error?.message || error.message || 'Unknown error');
+    console.error('   HTTP code:', error.error?.http_code || error.http_code || 'Unknown');
+    if (error.error?.http_code === 401) {
+      console.error('   ⚠️  ACCOUNT IS DISABLED!');
+      console.error('   Please reactivate your Cloudinary account or use different credentials.');
+      console.error('   See CLOUDINARY-ISSUE-SUMMARY.md for details.');
+    }
+  }
+};
+// Run async but don't wait (non-blocking startup)
+testCloudinaryConnection().catch(() => {});
 
 // Validate Cloudinary configuration
 const validateCloudinaryConfig = () => {
@@ -44,7 +71,12 @@ const storage = new CloudinaryStorage({
       transformation = [
         { width: 1200, height: 800, crop: 'limit', quality: 'auto', fetch_format: 'auto' }
       ];
-    } else if (file.fieldname === 'image' || file.fieldname === 'facultyImages') {
+    } else if (file.fieldname === 'image' || file.fieldname === 'images') {
+      folder = 'pak-nexus/marketplace'; // Marketplace product images
+      transformation = [
+        { width: 800, height: 600, crop: 'limit', quality: 'auto', fetch_format: 'auto' }
+      ];
+    } else if (file.fieldname === 'facultyImages') {
       folder = 'pak-nexus/faculty';
       transformation = [
         { width: 400, height: 400, crop: 'fill', gravity: 'face', quality: 'auto', fetch_format: 'auto' }
@@ -85,7 +117,8 @@ try {
     timeout: 30000 // 30 second timeout
   });
   
-  console.log('✅ Cloudinary configured successfully');
+  console.log('✅ Cloudinary multer storage configured successfully');
+  console.log('   Note: Account may still be disabled even if config passes validation');
 } catch (error) {
   console.error('❌ Cloudinary configuration error:', error.message);
   

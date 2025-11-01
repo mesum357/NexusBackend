@@ -54,24 +54,34 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       });
     }
 
-    // Process image URLs - use provided URLs or fallback to placeholders
+    // Process image URLs - use provided URLs
     let productImages = [];
     if (images && Array.isArray(images) && images.length > 0) {
       productImages = images;
+      console.log('📱 Using images array:', productImages.length, 'images');
+      productImages.forEach((img, idx) => {
+        console.log(`   Image ${idx + 1}: ${img.substring(0, 100)}...`);
+      });
     } else if (images && typeof images === 'string') {
       try {
         const parsedImages = JSON.parse(images);
         productImages = Array.isArray(parsedImages) ? parsedImages : [];
+        console.log('📱 Parsed images from JSON string:', productImages.length, 'images');
       } catch (parseError) {
         console.warn('📱 Could not parse images JSON, treating as string:', parseError.message);
         productImages = [images];
       }
+    } else {
+      console.log('📱 No images provided in request body');
     }
     
-    // If no images provided, use placeholder
+    // If no images provided, leave empty (no placeholder)
     if (productImages.length === 0) {
-      productImages = ['https://picsum.photos/400/400?random=1'];
+      console.log('📱 No images to process, setting empty array');
+      productImages = [];
     }
+    
+    console.log('📱 Final product images array:', productImages);
 
     // Parse specifications if it's a string
     let parsedSpecifications = {};
@@ -216,6 +226,10 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
 
     console.log('📱 Product created successfully with ID:', savedProduct._id);
     console.log('📱 Initial approval status:', savedProduct.approvalStatus);
+    console.log('📱 Images saved to database:', savedProduct.images?.length || 0);
+    if (savedProduct.images && savedProduct.images.length > 0) {
+      console.log('   First image:', savedProduct.images[0].substring(0, 100) + '...');
+    }
     console.log('📱 Product will be visible after admin approval');
 
     res.status(201).json({
@@ -297,7 +311,7 @@ router.post('/test-product', ensureAuthenticated, async (req, res) => {
       condition: 'new',
       location: 'Test Location',
       city: 'Test City',
-      images: ['https://picsum.photos/400/400?random=1'],
+      images: [],
       tags: ['test', 'debug', 'electronics'],
       specifications: {
         brand: 'Test Brand',

@@ -86,6 +86,26 @@ router.get('/', async (req, res) => {
 
     const total = await Product.countDocuments(filter);
 
+    // Log image information for debugging
+    if (products.length > 0) {
+      console.log(`📦 Returning ${products.length} approved products`);
+      products.forEach((p, idx) => {
+        const imageCount = p.images?.length || 0;
+        const validImages = p.images?.filter(img => 
+          img && typeof img === 'string' && img.includes('res.cloudinary.com')
+        ) || [];
+        console.log(`   Product ${idx + 1} (${p.title}): ${imageCount} total images, ${validImages.length} valid Cloudinary URLs`);
+        if (validImages.length > 0) {
+          console.log(`     First image: ${validImages[0].substring(0, 80)}...`);
+        } else if (imageCount > 0) {
+          console.log(`     ⚠️ Has ${imageCount} images but none are valid Cloudinary URLs`);
+          if (p.images && p.images[0]) {
+            console.log(`     Sample image value: ${String(p.images[0]).substring(0, 100)}`);
+          }
+        }
+      });
+    }
+
     res.json({
       products,
       pagination: {
@@ -157,8 +177,32 @@ router.post('/', ensureAuthenticated, upload.array('images', 10), async (req, re
       });
     }
 
-    // Handle image uploads
-    const images = req.files ? req.files.map(file => file.path) : []; // Cloudinary URLs
+    // Handle image uploads - Cloudinary returns URLs in secure_url, url, or path
+    let images = [];
+    if (req.files && req.files.length > 0) {
+      console.log(`📸 Processing ${req.files.length} uploaded image(s)`);
+      images = req.files.map((file, index) => {
+        // CloudinaryStorage might return URL in secure_url, url, or path
+        let imageUrl = file.secure_url || file.url || file.path;
+        console.log(`   Image ${index + 1}:`, {
+          fieldname: file.fieldname,
+          originalname: file.originalname,
+          secure_url: file.secure_url ? 'SET' : 'NOT SET',
+          url: file.url ? 'SET' : 'NOT SET',
+          path: file.path ? 'SET' : 'NOT SET',
+          finalUrl: imageUrl ? imageUrl.substring(0, 80) + '...' : 'NOT SET'
+        });
+        
+        if (!imageUrl || !imageUrl.includes('res.cloudinary.com')) {
+          console.error(`   ⚠️ Invalid image URL for ${file.originalname}`);
+        }
+        
+        return imageUrl;
+      }).filter(url => url && url.includes('res.cloudinary.com')); // Filter out invalid URLs
+      console.log(`✅ Extracted ${images.length} valid Cloudinary image URL(s)`);
+    } else {
+      console.log('📸 No images uploaded with product');
+    }
 
     // Parse specifications if provided
     let parsedSpecifications = {};
@@ -202,7 +246,12 @@ router.post('/', ensureAuthenticated, upload.array('images', 10), async (req, re
     });
 
     console.log('Creating product with Agent ID:', product.agentId);
+    console.log(`📦 Product images count: ${product.images.length}`);
+    if (product.images.length > 0) {
+      console.log(`   First image URL: ${product.images[0].substring(0, 80)}...`);
+    }
     await product.save();
+    console.log('✅ Product saved successfully');
     res.status(201).json({ 
       message: 'Product created successfully and is pending admin approval',
       product 
@@ -240,9 +289,23 @@ router.put('/:id', ensureAuthenticated, upload.array('images', 10), async (req, 
       }
     }
 
-    // Handle new image uploads
+    // Handle new image uploads - Cloudinary returns URLs in secure_url, url, or path
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map(file => file.path); // Cloudinary URLs
+      console.log(`📸 Processing ${req.files.length} new uploaded image(s) for update`);
+      const newImages = req.files.map((file, index) => {
+        // CloudinaryStorage might return URL in secure_url, url, or path
+        let imageUrl = file.secure_url || file.url || file.path;
+        console.log(`   New image ${index + 1}:`, {
+          fieldname: file.fieldname,
+          originalname: file.originalname,
+          secure_url: file.secure_url ? 'SET' : 'NOT SET',
+          url: file.url ? 'SET' : 'NOT SET',
+          path: file.path ? 'SET' : 'NOT SET',
+          finalUrl: imageUrl ? imageUrl.substring(0, 80) + '...' : 'NOT SET'
+        });
+        return imageUrl;
+      }).filter(url => url && url.includes('res.cloudinary.com')); // Filter out invalid URLs
+      console.log(`✅ Extracted ${newImages.length} valid Cloudinary image URL(s) for update`);
       finalImages = [...finalImages, ...newImages];
     }
 
