@@ -114,7 +114,8 @@ app.use(cors({
       'https://nexus-frontend-3dcx.onrender.com', // Nexus Frontend on Render (current)
       'https://nexus-frontend-production-5300.up.railway.app', // Nexus Frontend on Railway
       'https://nexusadminpanel-production.up.railway.app', // Admin Panel on Railway
-      'https://edunia.org' // Edunia website
+      'https://edunia.org', // Edunia website
+      'https://edunia-pilot-panel-xnch.onrender.com' // Control Panel on Render
     ];
     
     // Add environment-specific origins
@@ -127,20 +128,24 @@ app.use(cors({
       allowedOrigins.push(process.env.CONTROL_PANEL_URL);
     }
     
-    // Check if origin is allowed
-    if (allowedOrigins.includes(origin) || 
+    // Check if origin is allowed - be more permissive for Render/Railway deployments
+    const isAllowed = allowedOrigins.includes(origin) || 
         origin.endsWith('.railway.app') || 
         origin.endsWith('.up.railway.app') ||
-        origin.endsWith('.onrender.com')) { // Allow all Render URLs
+        origin.endsWith('.onrender.com') || // Allow all Render URLs
+        origin.includes('.onrender.com'); // Additional check for any Render URL
+    
+    if (isAllowed) {
       console.log('✅ CORS allowed for origin:', origin);
       return callback(null, true);
     }
     
     console.log('🚫 CORS blocked origin:', origin);
+    console.log('⚠️ Allowed origins:', allowedOrigins);
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
     'Content-Type', 
     'Authorization', 
@@ -156,6 +161,8 @@ app.use(cors({
     'Set-Cookie'
   ],
   exposedHeaders: ['Content-Length', 'X-Requested-With', 'Set-Cookie'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 // Handle preflight requests
@@ -176,7 +183,8 @@ app.use((req, res, next) => {
     'https://pakistanonlines.com',
     'http://pakistanonlines.com',
     'https://nexus-frontend-3dcx.onrender.com', // Nexus Frontend on Render (current)
-    'https://nexus-frontend-4sr8.onrender.com' // Nexus Frontend on Render
+    'https://nexus-frontend-4sr8.onrender.com', // Nexus Frontend on Render
+    'https://edunia-pilot-panel-xnch.onrender.com' // Control Panel on Render
   ];
   
   // Add environment-specific origins
@@ -193,12 +201,17 @@ app.use((req, res, next) => {
   const isRailway = process.env.RAILWAY_STATIC_URL || process.env.RAILWAY_ENVIRONMENT;
   const isLocalhost = origin && origin.startsWith('http://localhost:');
   
-  // Check if origin is allowed
-  if (origin && (allowedOrigins.includes(origin) || 
-      origin.endsWith('.railway.app') || 
-      origin.endsWith('.up.railway.app') ||
-      origin.endsWith('.onrender.com') || // Allow all Render URLs
-      (isRailway && isLocalhost))) {
+  // Check if origin is allowed - be more permissive for Render/Railway
+  const isAllowed = origin && (
+    allowedOrigins.includes(origin) || 
+    origin.endsWith('.railway.app') || 
+    origin.endsWith('.up.railway.app') ||
+    origin.endsWith('.onrender.com') || // Allow all Render URLs
+    origin.includes('.onrender.com') || // Additional check for any Render URL
+    (isRailway && isLocalhost)
+  );
+  
+  if (isAllowed) {
     res.header('Access-Control-Allow-Origin', origin);
     console.log('✅ CORS allowed for origin:', origin);
   } else {
@@ -207,6 +220,10 @@ app.use((req, res, next) => {
     if (isRailway && isLocalhost) {
       res.header('Access-Control-Allow-Origin', origin);
       console.log('✅ CORS allowed for localhost on Railway:', origin);
+    } else if (origin && origin.includes('.onrender.com')) {
+      // Fallback: always allow Render URLs
+      res.header('Access-Control-Allow-Origin', origin);
+      console.log('✅ CORS allowed for Render URL:', origin);
     }
   }
   
