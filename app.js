@@ -95,7 +95,8 @@ app.use((req, res, next) => {
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-app.use(cors({
+// CORS configuration
+const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
@@ -115,6 +116,7 @@ app.use(cors({
       'https://nexus-frontend-production-5300.up.railway.app', // Nexus Frontend on Railway
       'https://nexusadminpanel-production.up.railway.app', // Admin Panel on Railway
       'https://edunia.org', // Edunia website
+      'https://www.edunia.org', // Edunia website with www
       'https://edunia-pilot-panel-xnch.onrender.com' // Control Panel on Render
     ];
     
@@ -163,10 +165,12 @@ app.use(cors({
   exposedHeaders: ['Content-Length', 'X-Requested-With', 'Set-Cookie'],
   preflightContinue: false,
   optionsSuccessStatus: 204
-}));
+};
 
-// Handle preflight requests
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+// Handle preflight requests with the same CORS configuration
+app.options('*', cors(corsOptions));
 
 // Add CORS headers to all responses
 app.use((req, res, next) => {
@@ -184,6 +188,8 @@ app.use((req, res, next) => {
     'http://pakistanonlines.com',
     'https://nexus-frontend-3dcx.onrender.com', // Nexus Frontend on Render (current)
     'https://nexus-frontend-4sr8.onrender.com', // Nexus Frontend on Render
+    'https://edunia.org', // Edunia website
+    'https://www.edunia.org', // Edunia website with www
     'https://edunia-pilot-panel-xnch.onrender.com' // Control Panel on Render
   ];
   
