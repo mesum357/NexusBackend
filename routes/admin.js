@@ -536,7 +536,11 @@ router.get('/stats', async (req, res) => {
       totalProducts,
       pendingProducts,
       totalPaymentRequests,
-      pendingPaymentRequests
+      pendingPaymentRequests,
+      shopPaymentRequests,
+      hospitalPaymentRequests,
+      institutePaymentRequests,
+      marketplacePaymentRequests
     ] = await Promise.all([
       Institute.countDocuments(),
       Institute.countDocuments({ approvalStatus: 'pending' }),
@@ -545,7 +549,11 @@ router.get('/stats', async (req, res) => {
       Product.countDocuments(),
       Product.countDocuments({ approvalStatus: 'pending' }),
       PaymentRequest.countDocuments(),
-      PaymentRequest.countDocuments({ status: 'pending' })
+      PaymentRequest.countDocuments({ status: 'pending' }),
+      PaymentRequest.countDocuments({ entityType: 'shop' }),
+      PaymentRequest.countDocuments({ entityType: 'hospital' }),
+      PaymentRequest.countDocuments({ entityType: 'institute' }),
+      PaymentRequest.countDocuments({ entityType: 'marketplace' })
     ]);
 
     res.json({
@@ -556,7 +564,13 @@ router.get('/stats', async (req, res) => {
       },
       payments: {
         total: totalPaymentRequests,
-        pending: pendingPaymentRequests
+        pending: pendingPaymentRequests,
+        byEntityType: {
+          shops: shopPaymentRequests,
+          hospitals: hospitalPaymentRequests,
+          education: institutePaymentRequests,
+          marketplace: marketplacePaymentRequests
+        }
       }
     });
   } catch (error) {
