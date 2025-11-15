@@ -352,6 +352,7 @@ const Institute = require('./models/Institute');
 const Shop = require('./models/Shop');
 const Product = require('./models/Product');
 const PaymentRequest = require('./models/PaymentRequest');
+const PaymentSettings = require('./models/PaymentSettings');
 
 // Passport configuration
 passport.use(new LocalStrategy({
@@ -1540,29 +1541,8 @@ app.post('/api/auth/logout', function(req, res, next) {
 // Payment Settings endpoints
 app.get('/api/admin/payment-settings', async function(req, res) {
     try {
-        // Check if we have stored settings (from admin panel updates)
-        if (global.paymentSettings) {
-            return res.json({ settings: global.paymentSettings });
-        }
-        
-        // Return default settings if none stored
-        const defaultSettings = {
-            bankName: 'HBL Bank',
-            accountTitle: 'Pak Nexus Services',
-            accountNumber: '1234-5678-9012-3456',
-            iban: 'PK36HABB0000001234567890',
-            branchCode: '1234',
-            swiftCode: 'HABBPKKA',
-            qrCodeImage: '',
-            paymentAmounts: {
-                shop: 5000,
-                institute: 10000,
-                hospital: 15000,
-                marketplace: 2000
-            }
-        };
-
-        res.json({ settings: defaultSettings });
+        const settings = await PaymentSettings.getSettings();
+        res.json({ settings });
     } catch (error) {
         console.error('Error fetching payment settings:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -1592,26 +1572,40 @@ app.post('/api/admin/payment-settings', upload.single('qrCodeImage'), async func
             qrCodeImageUrl = req.file.path; // Cloudinary URL
         }
 
-        // Store settings in global variable for frontend access
-        // In production, you'd save these to a database
-        const updatedSettings = {
-            bankName,
-            accountTitle,
-            accountNumber,
-            iban,
-            branchCode: branchCode || '',
-            swiftCode: swiftCode || '',
-            qrCodeImage: qrCodeImageUrl,
-            paymentAmounts: parsedPaymentAmounts
-        };
+        // Get existing settings or create new
+        let settings = await PaymentSettings.findOne();
         
-        // Store in global variable for frontend access
-        global.paymentSettings = updatedSettings;
+        if (settings) {
+            // Update existing settings
+            settings.bankName = bankName;
+            settings.accountTitle = accountTitle;
+            settings.accountNumber = accountNumber;
+            settings.iban = iban;
+            settings.branchCode = branchCode || '';
+            settings.swiftCode = swiftCode || '';
+            if (qrCodeImageUrl) {
+                settings.qrCodeImage = qrCodeImageUrl;
+            }
+            settings.paymentAmounts = parsedPaymentAmounts;
+            await settings.save();
+        } else {
+            // Create new settings
+            settings = await PaymentSettings.create({
+                bankName,
+                accountTitle,
+                accountNumber,
+                iban,
+                branchCode: branchCode || '',
+                swiftCode: swiftCode || '',
+                qrCodeImage: qrCodeImageUrl,
+                paymentAmounts: parsedPaymentAmounts
+            });
+        }
 
         res.json({ 
             success: true, 
             message: 'Payment settings updated successfully',
-            settings: updatedSettings
+            settings: settings.toObject()
         });
     } catch (error) {
         console.error('Error updating payment settings:', error);
@@ -1622,33 +1616,8 @@ app.post('/api/admin/payment-settings', upload.single('qrCodeImage'), async func
 // Public endpoint to get payment settings for frontend
 app.get('/api/payment/settings', async function(req, res) {
     try {
-        // In a real application, you'd store these in a database
-        // For now, we'll use a simple in-memory storage that gets updated by admin
-        // You can replace this with database storage later
-        
-        // Check if we have stored settings (from admin panel updates)
-        if (global.paymentSettings) {
-            return res.json({ settings: global.paymentSettings });
-        }
-        
-        // Return default settings if none stored
-        const defaultSettings = {
-            bankName: 'HBL Bank',
-            accountTitle: 'Pak Nexus Services',
-            accountNumber: '1234-5678-9012-3456',
-            iban: 'PK36HABB0000001234567890',
-            branchCode: '1234',
-            swiftCode: 'HABBPKKA',
-            qrCodeImage: '',
-            paymentAmounts: {
-                shop: 5000,
-                institute: 10000,
-                hospital: 15000,
-                marketplace: 2000
-            }
-        };
-
-        res.json({ settings: defaultSettings });
+        const settings = await PaymentSettings.getSettings();
+        res.json({ settings: settings.toObject() });
     } catch (error) {
         console.error('Error fetching payment settings:', error);
         res.status(500).json({ error: 'Internal server error' });

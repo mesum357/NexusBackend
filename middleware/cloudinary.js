@@ -91,6 +91,16 @@ const storage = new CloudinaryStorage({
       transformation = [
         { width: 1200, height: 400, crop: 'fill', quality: 'auto', fetch_format: 'auto' }
       ];
+    } else if (file.fieldname === 'qrCodeImage') {
+      folder = 'pak-nexus/payment-settings';
+      transformation = [
+        { width: 400, height: 400, crop: 'limit', quality: 'auto', fetch_format: 'auto' }
+      ];
+    } else if (file.fieldname === 'transactionScreenshot') {
+      folder = 'pak-nexus/payment-screenshots';
+      transformation = [
+        { width: 1200, height: 800, crop: 'limit', quality: 'auto', fetch_format: 'auto' }
+      ];
     }
     
     return {

@@ -6,7 +6,7 @@ const Institute = require('../models/Institute');
 const Hospital = require('../models/Hospital');
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
-const upload = require('../middleware/upload');
+const { upload } = require('../middleware/cloudinary');
 
 // Create a new payment request
 router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot'), async (req, res) => {
@@ -91,6 +91,21 @@ router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot
       console.log('No Agent ID provided');
     }
 
+    // Get Cloudinary URL from uploaded file
+    let screenshotUrl = '';
+    if (screenshotFile) {
+      // Cloudinary upload returns secure_url or url or path
+      screenshotUrl = screenshotFile.secure_url || screenshotFile.url || screenshotFile.path || '';
+      
+      // If it's still a filename (local storage fallback), keep it but log warning
+      if (!screenshotUrl || (!screenshotUrl.startsWith('http://') && !screenshotUrl.startsWith('https://'))) {
+        console.warn('⚠️ Payment screenshot not uploaded to Cloudinary, using local filename:', screenshotFile.filename);
+        screenshotUrl = screenshotFile.filename; // Fallback to filename for backward compatibility
+      } else {
+        console.log('✅ Payment screenshot uploaded to Cloudinary:', screenshotUrl);
+      }
+    }
+
     // Create payment request with screenshot
     const paymentRequest = new PaymentRequest({
       user: req.user._id,
@@ -105,7 +120,7 @@ router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot
       notes: notes ? notes.trim() : 'Payment via screenshot upload',
       processingFee: 0,
       totalAmount: Number(amount) || 0,
-      screenshotFile: screenshotFile.filename // Store the uploaded file name
+      screenshotFile: screenshotUrl // Store Cloudinary URL or filename
     });
 
     await paymentRequest.save();

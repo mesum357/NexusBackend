@@ -345,6 +345,26 @@ router.get('/payment-requests', async (req, res) => {
   }
 });
 
+// Delete payment request (no authentication required for admin panel)
+router.delete('/payment-request/:id', async (req, res) => {
+  try {
+    const paymentRequest = await PaymentRequest.findById(req.params.id);
+    if (!paymentRequest) {
+      return res.status(404).json({ error: 'Payment request not found' });
+    }
+
+    await PaymentRequest.findByIdAndDelete(req.params.id);
+
+    res.json({
+      success: true,
+      message: 'Payment request deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting payment request:', error);
+    res.status(500).json({ error: 'Failed to delete payment request' });
+  }
+});
+
 // Update payment request status (no authentication required for admin panel)
 router.put('/payment-request/:id/status', async (req, res) => {
   try {
@@ -624,7 +644,7 @@ router.delete('/user/:id', async (req, res) => {
 // Get all shops for admin management (no authentication required for admin panel)
 router.get('/shops', async (req, res) => {
   try {
-    const shops = await Shop.find({}).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
+    const shops = await Shop.find({ approvalStatus: 'approved' }).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
     res.json({ shops });
   } catch (error) {
     console.error('Error fetching shops:', error);
@@ -635,7 +655,7 @@ router.get('/shops', async (req, res) => {
 // Get all hospitals for admin management (no authentication required for admin panel)
 router.get('/hospitals', async (req, res) => {
   try {
-    const hospitals = await Hospital.find({}).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
+    const hospitals = await Hospital.find({ approvalStatus: 'approved' }).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
     res.json({ hospitals });
   } catch (error) {
     console.error('Error fetching hospitals:', error);
@@ -646,7 +666,7 @@ router.get('/hospitals', async (req, res) => {
 // Get all institutes for admin management (no authentication required for admin panel)
 router.get('/institutes', async (req, res) => {
   try {
-    const institutes = await Institute.find({}).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
+    const institutes = await Institute.find({ approvalStatus: 'approved' }).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
     res.json({ institutes });
   } catch (error) {
     console.error('Error fetching institutes:', error);
@@ -657,7 +677,7 @@ router.get('/institutes', async (req, res) => {
 // Get all products for admin management (no authentication required for admin panel)
 router.get('/products', async (req, res) => {
   try {
-    const products = await Product.find({}).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
+    const products = await Product.find({ approvalStatus: 'approved' }).sort({ createdAt: -1 }).populate('owner', 'username email fullName');
     res.json({ products });
   } catch (error) {
     console.error('Error fetching products:', error);
