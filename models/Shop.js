@@ -14,6 +14,7 @@ const productSchema = new mongoose.Schema({
 const shopSchema = new mongoose.Schema({
   // Basic shop information
   shopName: { type: String, required: true },
+  country: { type: String, default: 'Pakistan' },
   city: { type: String, required: true },
   shopType: { type: String, enum: ['Product Seller', 'Service Provider'], required: true },
   shopDescription: { type: String },

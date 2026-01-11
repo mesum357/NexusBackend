@@ -9,6 +9,7 @@ const productSchema = new mongoose.Schema({
   category: { type: String, required: true },
   condition: { type: String, enum: ['new', 'used', 'refurbished'], default: 'used' },
   location: { type: String, required: true },
+  country: { type: String, default: 'Pakistan' },
   city: { type: String, required: true },
   images: [{ type: String }], // Array of image URLs
   featured: { type: Boolean, default: false },

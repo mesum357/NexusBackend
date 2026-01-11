@@ -35,6 +35,7 @@ const instituteSchema = new mongoose.Schema({
   },
   agentId: { type: String }, // Optional agent ID
   location: { type: String, required: true },
+  country: { type: String, default: 'Pakistan' },
   city: { type: String, required: true },
   province: { type: String, required: true },
   
