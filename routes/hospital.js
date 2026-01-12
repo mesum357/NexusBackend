@@ -310,8 +310,8 @@ router.get('/all', async (req, res) => {
         const reviews = await Review.find({ entityId: hospital._id, entityType: 'hospital' });
         const totalReviews = reviews.length;
         
-        // Use average from reviews if available, otherwise keep the default rating (4.5)
-        let rating = hospital.rating || 4.5; // Default to 4.5 if not set
+        // Use average from reviews if available, otherwise show 0
+        let rating = 0;
         if (totalReviews > 0) {
           rating = parseFloat((reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1));
         }

@@ -174,7 +174,7 @@ router.post('/create', (req, res, next) => {
       accreditation: parsedAccreditation,
       facilities: parsedFacilities,
       owner: req.user._id,
-      ownerName: req.user.username || req.user.email || '',
+      ownerName: req.user.fullName || req.user.username || req.user.email || '',
       ownerEmail: req.user.email || '',
       ownerPhone: req.user.phone || '',
       verified: false,
@@ -248,8 +248,8 @@ router.get('/all', async (req, res) => {
         });
         const totalReviews = reviews.length;
         
-        // Use average from reviews if available, otherwise keep the default rating (4.5)
-        let rating = institute.rating || 4.5; // Default to 4.5 if not set
+        // Use average from reviews if available, otherwise show 0
+        let rating = 0;
         if (totalReviews > 0) {
           rating = parseFloat((reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1));
         }

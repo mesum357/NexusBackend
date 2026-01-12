@@ -139,7 +139,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       rating: 4.5,
       totalReviews: 0,
       owner: req.user._id,
-      ownerName: req.user.username || req.user.email || '',
+      ownerName: req.user.fullName || req.user.username || req.user.email || '',
       ownerDp: ownerProfilePath || req.user.profileImage || '',
       // Use user-provided Agent ID or generate one if not provided
       agentId: agentId || generateShopAgentId(shopName),
@@ -310,7 +310,7 @@ router.post('/create', ensureAuthenticated, upload.fields([
       rating: 4.5,
       totalReviews: 0,
       owner: req.user._id,
-      ownerName: req.user.username || req.user.email || '',
+      ownerName: req.user.fullName || req.user.username || req.user.email || '',
       ownerDp: ownerProfilePath || req.user.profileImage || '',
       // Use user-provided Agent ID or generate one if not provided
       agentId: req.body.agentId || generateShopAgentId(shopName)
@@ -381,7 +381,7 @@ router.post('/test-products', ensureAuthenticated, async (req, res) => {
       rating: 4.5,
       totalReviews: 0,
       owner: req.user._id,
-      ownerName: req.user.username || req.user.email || '',
+      ownerName: req.user.fullName || req.user.username || req.user.email || '',
       ownerDp: 'https://via.placeholder.com/100x100/cccccc/666666?text=Profile',
       agentId: 'test-agent',
       approvalStatus: 'pending'

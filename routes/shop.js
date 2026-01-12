@@ -70,7 +70,7 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
         whatsapp: whatsapp || ''
       },
       owner: req.user._id,
-      ownerName: req.user.username || req.user.email || '',
+      ownerName: req.user.fullName || req.user.username || req.user.email || '',
       ownerDp: ownerDp, // User profile or default
       // Use user-provided Agent ID or generate one if not provided
       agentId: req.body.agentId || generateShopAgentId(shopName)
@@ -92,13 +92,24 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
 // Get all shops
 router.get('/all', async (req, res) => {
   try {
-    // Only show approved shops that are not frozen
-    const shops = await Shop.find({ approvalStatus: 'approved', isFrozen: { $ne: true } }).sort({ createdAt: -1 });
+    // Only show approved shops that are not frozen, populate owner for fullName
+    const shops = await Shop.find({ approvalStatus: 'approved', isFrozen: { $ne: true } })
+      .populate('owner', 'fullName username email')
+      .sort({ createdAt: -1 });
     console.log('Found shops:', shops.length);
     
     // Process each shop's products to ensure image fields are properly populated
     const processedShops = shops.map(shop => {
       const processedShop = shop.toObject();
+      
+      // Fix ownerName: use owner's fullName if the stored ownerName looks like an email
+      if (processedShop.owner && typeof processedShop.owner === 'object') {
+        const owner = processedShop.owner;
+        // Check if stored ownerName is an email (contains @)
+        if (!processedShop.ownerName || processedShop.ownerName.includes('@')) {
+          processedShop.ownerName = owner.fullName || owner.username || owner.email || 'Shop Owner';
+        }
+      }
       
       if (processedShop.products && processedShop.products.length > 0) {
         console.log(`🖼️ Processing products for shop "${processedShop.shopName}" (${processedShop.products.length} products)`);
