@@ -36,6 +36,7 @@ router.get('/', async (req, res) => {
     const {
       search,
       category,
+      country,
       city,
       condition,
       priceMin,
@@ -55,6 +56,10 @@ router.get('/', async (req, res) => {
     
     if (category && category !== 'all') {
       filter.category = category;
+    }
+    
+    if (country && country !== 'all') {
+      filter.country = country;
     }
     
     if (city && city !== 'all') {
