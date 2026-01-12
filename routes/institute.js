@@ -247,13 +247,16 @@ router.get('/all', async (req, res) => {
           ]
         });
         const totalReviews = reviews.length;
-        const avgRating = totalReviews > 0 
-          ? (reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)
-          : null;
+        
+        // Use average from reviews if available, otherwise keep the default rating (4.5)
+        let rating = institute.rating || 4.5; // Default to 4.5 if not set
+        if (totalReviews > 0) {
+          rating = parseFloat((reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1));
+        }
         
         return {
           ...instituteObj,
-          rating: avgRating ? parseFloat(avgRating) : institute.rating || null,
+          rating: rating,
           totalReviews: totalReviews
         };
       })
