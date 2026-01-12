@@ -1,15 +1,28 @@
 const mongoose = require('mongoose');
 
 const reviewSchema = new mongoose.Schema({
+  // Support both old (institute-only) and new (generic entity) structure
   institute: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Institute',
-    required: true
+    ref: 'Institute'
   },
+  // Generic entity support for hospitals, shops, products, etc.
+  entityId: {
+    type: mongoose.Schema.Types.ObjectId,
+    refPath: 'entityType'
+  },
+  entityType: {
+    type: String,
+    enum: ['hospital', 'institute', 'shop', 'product']
+  },
+  // Support both old (reviewer) and new (user) field names
   reviewer: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    ref: 'User'
+  },
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   },
   rating: {
     type: Number,
@@ -19,7 +32,6 @@ const reviewSchema = new mongoose.Schema({
   },
   comment: {
     type: String,
-    required: true,
     trim: true,
     maxlength: 1000
   },
@@ -31,7 +43,8 @@ const reviewSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Ensure one review per user per institute
-reviewSchema.index({ institute: 1, reviewer: 1 }, { unique: true });
+// Ensure one review per user per entity (supports both old and new structures)
+reviewSchema.index({ institute: 1, reviewer: 1 }, { unique: true, sparse: true });
+reviewSchema.index({ entityId: 1, entityType: 1, user: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('Review', reviewSchema); 

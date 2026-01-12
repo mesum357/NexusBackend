@@ -300,6 +300,26 @@ router.get('/all', async (req, res) => {
 
     console.log('🏥 Hospitals found:', hospitals.length);
     console.log('🏥 Total hospitals in database:', total);
+
+    // Fetch real review statistics for each hospital
+    const hospitalsWithReviews = await Promise.all(
+      hospitals.map(async (hospital) => {
+        const hospitalObj = hospital.toObject();
+        
+        // Get review stats for this hospital
+        const reviews = await Review.find({ entityId: hospital._id, entityType: 'hospital' });
+        const totalReviews = reviews.length;
+        const avgRating = totalReviews > 0 
+          ? (reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)
+          : null;
+        
+        return {
+          ...hospitalObj,
+          rating: avgRating ? parseFloat(avgRating) : hospital.rating || null,
+          totalReviews: totalReviews
+        };
+      })
+    );
     
     if (hospitals.length > 0) {
       hospitals.forEach((hospital, index) => {
@@ -324,7 +344,7 @@ router.get('/all', async (req, res) => {
     const totalPages = Math.ceil(total / limit);
 
     res.json({
-      hospitals,
+      hospitals: hospitalsWithReviews,
       totalPages,
       currentPage: parseInt(page),
       total
