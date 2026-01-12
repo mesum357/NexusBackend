@@ -233,7 +233,33 @@ router.get('/all', async (req, res) => {
       query.domain = 'healthcare';
     }
     const institutes = await Institute.find(query);
-    res.json({ institutes });
+    
+    // Fetch real review statistics for each institute
+    const institutesWithReviews = await Promise.all(
+      institutes.map(async (institute) => {
+        const instituteObj = institute.toObject();
+        
+        // Get review stats for this institute (check both old and new review structures)
+        const reviews = await Review.find({
+          $or: [
+            { institute: institute._id },
+            { entityId: institute._id, entityType: 'institute' }
+          ]
+        });
+        const totalReviews = reviews.length;
+        const avgRating = totalReviews > 0 
+          ? (reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)
+          : null;
+        
+        return {
+          ...instituteObj,
+          rating: avgRating ? parseFloat(avgRating) : institute.rating || null,
+          totalReviews: totalReviews
+        };
+      })
+    );
+    
+    res.json({ institutes: institutesWithReviews });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
