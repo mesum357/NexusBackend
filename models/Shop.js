@@ -19,6 +19,7 @@ const shopSchema = new mongoose.Schema({
   shopType: { type: String, enum: ['Product Seller', 'Service Provider'], required: true },
   shopDescription: { type: String },
   address: { type: String },
+  area: { type: String, default: '' },
   agentId: { type: String }, // Optional agent ID
   categories: [{ type: String, required: true }],
   

@@ -78,7 +78,8 @@ router.post('/create', (req, res, next) => {
       facilities,
       ownerName,
       ownerEmail,
-      ownerPhone
+      ownerPhone,
+      area
     } = req.body;
 
     // Validate required fields
@@ -151,6 +152,7 @@ router.post('/create', (req, res, next) => {
       type,
       location: address || `${city}, ${province}`, // Use address as location or create from city/province
       city,
+      area: area || '',
       province,
       description: description || '',
       specialization: specialization || '',
@@ -640,6 +642,11 @@ router.put('/:id', ensureAuthenticated, upload.fields([
     }
     if (updateData.facilities === '' || updateData.facilities === '[]') {
       updateData.facilities = []
+    }
+    
+    // Explicitly handle area in updateData
+    if (updateData.area === undefined && req.body.area) {
+      updateData.area = req.body.area;
     }
     
     console.log('Cleaned update data:', updateData)

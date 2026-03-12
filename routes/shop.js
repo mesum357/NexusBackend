@@ -41,7 +41,8 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
       description,
       facebook,
       instagram,
-      whatsapp
+      whatsapp,
+      area
     } = req.body;
 
     // Set default images if none provided
@@ -52,6 +53,7 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
     const shop = new Shop({
       shopName,
       city,
+      area,
       categories: Array.isArray(businessCategories) ? businessCategories : [businessCategories],
       shopType: businessType,
       shopDescription: description,
@@ -96,7 +98,7 @@ router.get('/all', async (req, res) => {
     const shops = await Shop.find({ approvalStatus: 'approved', isFrozen: { $ne: true } })
       .populate('owner', 'fullName username email')
       .sort({ createdAt: -1 });
-    console.log('Found shops:', shops.length);
+    console.log(`📦 Serving ${shops.length} approved shops. Areas:`, shops.map(s => `${s.shopName}: ${s.area || 'EMPTY'}`));
     
     // Process each shop's products to ensure image fields are properly populated
     const processedShops = shops.map(shop => {
@@ -393,12 +395,14 @@ router.put('/:shopId', ensureAuthenticated, upload.fields([
       whatsappNumber,
       facebookUrl,
       instagramHandle,
-      websiteUrl
+      websiteUrl,
+      area
     } = req.body;
 
     // Update shop fields
     if (shopName) shop.shopName = shopName;
     if (city) shop.city = city;
+    if (area) shop.area = area;
     if (shopType) shop.shopType = shopType;
     if (shopDescription) shop.shopDescription = shopDescription;
     if (categories) {

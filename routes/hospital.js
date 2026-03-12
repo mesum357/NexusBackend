@@ -81,7 +81,8 @@ router.post('/create', (req, res, next) => {
       ambulanceService,
       ownerName,
       ownerEmail,
-      ownerPhone
+      ownerPhone,
+      area
     } = req.body;
 
     // Validate required fields
@@ -132,6 +133,7 @@ router.post('/create', (req, res, next) => {
       type,
       location: req.body.location || city,
       city,
+      area: area || '',
       province,
       description,
       specialization,
@@ -416,6 +418,11 @@ router.put('/:id', ensureAuthenticated, uploadWithFilter.fields([
       if (req.files.gallery) {
         updateData.gallery = req.files.gallery.map(file => file.path);
       }
+    }
+
+    // Explicitly update area
+    if (req.body.area) {
+      updateData.area = req.body.area;
     }
 
     const updatedHospital = await Hospital.findByIdAndUpdate(

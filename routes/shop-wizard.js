@@ -33,9 +33,9 @@ const upload = multer({
 // Create shop from wizard data (JSON) - for use after payment
 router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
   try {
-    console.log('Shop wizard creation from JSON request received');
-    console.log('Body:', req.body);
-
+    console.log('🚀 SHOP CREATION REQUEST RECEIVED');
+    console.log('📦 Request Body:', JSON.stringify(req.body, null, 2));
+    
     const {
       shopName,
       city,
@@ -49,6 +49,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       whatsappNumber,
       products,
       agentId,
+      area,
       approvalStatus
     } = req.body;
 
@@ -136,6 +137,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       instagramHandle: instagramHandle || '',
       whatsappNumber: whatsappNumber || '',
       products: processedProducts, // Use processed products with correct image field
+      area: area || '',
       rating: 4.5,
       totalReviews: 0,
       owner: req.user._id,
@@ -146,33 +148,8 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       approvalStatus: approvalStatus || 'pending'
     };
 
-    console.log('Creating shop with data:', shopData);
-    console.log('Generated Agent ID:', shopData.agentId);
-    console.log('📝 Shop approval status will be: pending (requires payment verification)');
-    console.log('📦 Products being saved:', shopData.products);
-    console.log('📦 Number of products:', shopData.products ? shopData.products.length : 0);
-    console.log('🖼️ Image data being saved:');
-    console.log('   - shopLogo:', shopData.shopLogo);
-    console.log('   - shopBanner:', shopData.shopBanner);
-    console.log('   - ownerProfilePhoto:', shopData.ownerProfilePhoto);
+    console.log('🏗️ FINAL SHOP DATA OBJECT BEFORE SAVE:', JSON.stringify(shopData, null, 2));
     
-    // Debug each product individually
-    if (shopData.products && shopData.products.length > 0) {
-      shopData.products.forEach((product, index) => {
-        console.log(`   Product ${index + 1}:`, {
-          id: product.id,
-          name: product.name,
-          description: product.description,
-          price: product.price,
-          discountPercentage: product.discountPercentage,
-          category: product.category,
-          image: product.image
-        });
-      });
-    } else {
-      console.log('   ❌ No products found in shopData');
-    }
-
     // Create and save the shop
     const shop = new Shop(shopData);
     const savedShop = await shop.save();
@@ -224,7 +201,8 @@ router.post('/create', ensureAuthenticated, upload.fields([
       facebookUrl,
       instagramHandle,
       whatsappNumber,
-      products
+      products,
+      area
     } = req.body;
 
     // Validate required fields
@@ -307,6 +285,7 @@ router.post('/create', ensureAuthenticated, upload.fields([
       instagramHandle: instagramHandle || '',
       whatsappNumber: whatsappNumber || '',
       products: updatedProducts,
+      area: area || '',
       rating: 4.5,
       totalReviews: 0,
       owner: req.user._id,

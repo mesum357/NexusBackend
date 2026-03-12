@@ -37,6 +37,7 @@ const instituteSchema = new mongoose.Schema({
   location: { type: String, required: true },
   country: { type: String, default: 'Pakistan' },
   city: { type: String, required: true },
+  area: { type: String, default: '' },
   province: { type: String, required: true },
   
   // Description

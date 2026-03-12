@@ -44,6 +44,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       specifications,
       contactPreference,
       agentId,
+      area,
       approvalStatus
     } = req.body;
 
@@ -136,6 +137,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       ownerPhone: req.user.phone || '',
       ownerEmail: req.user.email || '',
       status: 'active',
+      area: area || '',
       agentId: agentId || `PROD_${Date.now()}`,
       approvalStatus: approvalStatus || 'pending' // Start with pending status
     };

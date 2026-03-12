@@ -11,6 +11,7 @@ const productSchema = new mongoose.Schema({
   location: { type: String, required: true },
   country: { type: String, default: 'Pakistan' },
   city: { type: String, required: true },
+  area: { type: String, default: '' },
   images: [{ type: String }], // Array of image URLs
   featured: { type: Boolean, default: false },
   views: { type: Number, default: 0 },

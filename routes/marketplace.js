@@ -172,7 +172,8 @@ router.post('/', ensureAuthenticated, upload.array('images', 10), async (req, re
       specifications,
       contactPreference,
       ownerPhone,
-      ownerEmail
+      ownerEmail,
+      area
     } = req.body;
 
     // Validate required fields
@@ -246,6 +247,7 @@ router.post('/', ensureAuthenticated, upload.array('images', 10), async (req, re
       ownerName: req.user.fullName || req.user.username || req.user.email,
       ownerPhone: ownerPhone || req.user.phone || '',
       ownerEmail: ownerEmail || req.user.email || '',
+      area: area || '',
       // Use user-provided Agent ID or generate one if not provided
       agentId: req.body.agentId || generateProductAgentId(title)
     });
@@ -339,6 +341,11 @@ router.put('/:id', ensureAuthenticated, upload.array('images', 10), async (req, 
     // Convert price to number if provided
     if (updateData.price) {
       updateData.price = Number(updateData.price);
+    }
+    
+    // Explicitly update area
+    if (req.body.area) {
+      updateData.area = req.body.area;
     }
 
     // Remove fields that shouldn't be updated

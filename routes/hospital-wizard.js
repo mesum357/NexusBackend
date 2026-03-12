@@ -62,6 +62,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       emergencyServices,
       ambulanceService,
       agentId,
+      area,
       approvalStatus
     } = req.body;
 
@@ -226,6 +227,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       verified: false,
       rating: 4.5,
       totalReviews: 0,
+      area: area || '',
       agentId: agentId || generateHospitalAgentId(name),
       approvalStatus: approvalStatus || 'pending' // Start with pending status
     };

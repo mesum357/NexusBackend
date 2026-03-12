@@ -61,6 +61,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       facilities,
       domain,
       agentId,
+      area,
       approvalStatus
     } = req.body;
 
@@ -254,6 +255,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
       verified: false,
       rating: 4.5,
       totalReviews: 0,
+      area: area || '',
       agentId: agentId || generateInstituteAgentId(name),
       approvalStatus: approvalStatus || 'pending' // Start with pending status
     };
