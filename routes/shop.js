@@ -637,7 +637,7 @@ router.post('/:id/add-product', ensureAuthenticated, upload.single('productImage
 router.put('/:shopId/update-product/:productIndex', ensureAuthenticated, upload.single('productImage'), async (req, res) => {
   try {
     const { shopId, productIndex } = req.params;
-    const { name, description, price, discountPercentage, category } = req.body;
+    const { name, description, price, discountPercentage, category, isFeatured } = req.body;
     
     console.log('📦 Updating product in shop:', shopId, 'at index:', productIndex);
     console.log('📦 Update data:', { name, description, price, discountPercentage, category });
@@ -663,6 +663,11 @@ router.put('/:shopId/update-product/:productIndex', ensureAuthenticated, upload.
     if (price) shop.products[idx].price = Number(price);
     if (discountPercentage !== undefined) shop.products[idx].discountPercentage = Number(discountPercentage) || 0;
     if (category) shop.products[idx].category = category;
+    
+    // Handle featured status - handle string to boolean conversion from FormData
+    if (isFeatured !== undefined) {
+      shop.products[idx].isFeatured = isFeatured === 'true' || isFeatured === true;
+    }
     
     // Handle image update - only update if new image is uploaded
     if (req.file && req.file.path) {
