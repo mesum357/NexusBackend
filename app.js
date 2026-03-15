@@ -52,6 +52,8 @@ const marketplaceRoutes = require('./routes/marketplace');
 const categoryRoutes = require('./routes/categories');
 const paymentRoutes = require('./routes/payment');
 const adminRoutes = require('./routes/admin');
+const orderRoutes = require('./routes/order');
+const notificationRoutes = require('./routes/notifications');
 const fs = require('fs');
 const { upload } = require('./middleware/cloudinary');
 
@@ -2440,6 +2442,8 @@ app.use('/api/feed', feedRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/follow', followRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/admin', adminRoutes);

@@ -664,9 +664,12 @@ router.put('/:shopId/update-product/:productIndex', ensureAuthenticated, upload.
     if (discountPercentage !== undefined) shop.products[idx].discountPercentage = Number(discountPercentage) || 0;
     if (category) shop.products[idx].category = category;
     
-    // Handle featured status - handle string to boolean conversion from FormData
+    // Handle featured and stock status
     if (isFeatured !== undefined) {
       shop.products[idx].isFeatured = isFeatured === 'true' || isFeatured === true;
+    }
+    if (req.body.inStock !== undefined) {
+      shop.products[idx].inStock = req.body.inStock === 'true' || req.body.inStock === true;
     }
     
     // Handle image update - only update if new image is uploaded

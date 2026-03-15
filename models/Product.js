@@ -14,6 +14,7 @@ const productSchema = new mongoose.Schema({
   area: { type: String, default: '' },
   images: [{ type: String }], // Array of image URLs
   featured: { type: Boolean, default: false },
+  inStock: { type: Boolean, default: true },
   views: { type: Number, default: 0 },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

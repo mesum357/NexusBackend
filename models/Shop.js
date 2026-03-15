@@ -10,6 +10,7 @@ const productSchema = new mongoose.Schema({
   discountPercentage: { type: Number, default: 0 },
   category: { type: String },
   isFeatured: { type: Boolean, default: false },
+  inStock: { type: Boolean, default: true },
 }, { _id: false });
 
 const shopSchema = new mongoose.Schema({
