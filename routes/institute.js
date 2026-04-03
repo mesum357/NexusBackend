@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const Institute = require('../models/Institute');
 const Review = require('../models/Review');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticatedOrMobile, optionalAttachMobileUser } = require('../middleware/auth');
 const { upload, cloudinary, validateCloudinaryConfig } = require('../middleware/cloudinary');
 const { generateInstituteAgentId } = require('../utils/agentIdGenerator');
 const StudentApplication = require('../models/StudentApplication');
@@ -42,7 +42,7 @@ router.post('/create', (req, res, next) => {
   console.log('User authenticated:', req.isAuthenticated());
   console.log('User:', req.user);
   next();
-}, ensureAuthenticated, uploadWithFilter.fields([
+}, ensureAuthenticatedOrMobile, uploadWithFilter.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'banner', maxCount: 1 },
   { name: 'gallery', maxCount: 10 },
@@ -271,7 +271,7 @@ router.get('/all', async (req, res) => {
 });
 
 // Get institutes owned by current user
-router.get('/my-institutes', ensureAuthenticated, async (req, res) => {
+router.get('/my-institutes', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const institutes = await Institute.find({ owner: req.user._id }).sort({ createdAt: -1 });
     res.json({ institutes });
@@ -282,7 +282,7 @@ router.get('/my-institutes', ensureAuthenticated, async (req, res) => {
 });
 
 // Get pending institutes for current user
-router.get('/my-pending-institutes', ensureAuthenticated, async (req, res) => {
+router.get('/my-pending-institutes', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const pendingInstitutes = await Institute.find({ 
       owner: req.user._id, 
@@ -296,21 +296,22 @@ router.get('/my-pending-institutes', ensureAuthenticated, async (req, res) => {
 });
 
 // Get single institute by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAttachMobileUser, async (req, res) => {
   try {
     const institute = await Institute.findById(req.params.id);
     if (!institute) {
       return res.status(404).json({ error: 'Institute not found' });
     }
-    
-    // Check if user is owner or admin, or if institute is approved
-    const isOwner = req.isAuthenticated() && institute.owner.toString() === req.user._id.toString();
-    const isAdmin = req.isAuthenticated() && req.user.isAdmin;
-    
+
+    const user = req.user;
+    const uid = user?._id?.toString();
+    const isOwner = !!uid && institute.owner.toString() === uid;
+    const isAdmin = !!user?.isAdmin;
+
     if (!isOwner && !isAdmin && institute.approvalStatus !== 'approved') {
       return res.status(404).json({ error: 'Institute not found' });
     }
-    
+
     res.json({ institute });
   } catch (error) {
     console.error('Error fetching institute:', error);
@@ -348,7 +349,7 @@ router.get('/:id/gallery', async (req, res) => {
 
 // Add gallery images (owner only) - supports multiple files
 const galleryUpload = upload.array('gallery', 10);
-router.post('/:id/gallery', ensureAuthenticated, (req, res, next) => {
+router.post('/:id/gallery', ensureAuthenticatedOrMobile, (req, res, next) => {
   galleryUpload(req, res, function (err) {
     if (err) {
       console.error('Error during image upload middleware:', err);
@@ -418,7 +419,7 @@ router.post('/:id/gallery', ensureAuthenticated, (req, res, next) => {
 });
 
 // Remove gallery image by URL (owner only)
-router.delete('/:id/gallery', ensureAuthenticated, async (req, res) => {
+router.delete('/:id/gallery', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { imageUrl } = req.body;
     console.log('DELETE /gallery route hit for institute ID:', req.params.id);
@@ -491,7 +492,7 @@ router.get('/:id/faculty', async (req, res) => {
 });
 
 // Add faculty (owner only). Accepts multipart with optional image file named 'image'
-router.post('/:id/faculty', ensureAuthenticated, upload.single('image'), async (req, res) => {
+router.post('/:id/faculty', ensureAuthenticatedOrMobile, upload.single('image'), async (req, res) => {
   try {
     console.log('POST /faculty route hit for institute ID:', req.params.id);
     console.log('Request body:', req.body);
@@ -542,7 +543,7 @@ router.post('/:id/faculty', ensureAuthenticated, upload.single('image'), async (
 });
 
 // Remove faculty by subdocument id (owner only)
-router.delete('/:id/faculty/:facultyId', ensureAuthenticated, async (req, res) => {
+router.delete('/:id/faculty/:facultyId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const institute = await Institute.findById(req.params.id);
     if (!institute) {
@@ -567,7 +568,7 @@ router.delete('/:id/faculty/:facultyId', ensureAuthenticated, async (req, res) =
 });
 
 // Update institute (owner only)
-router.put('/:id', ensureAuthenticated, upload.fields([
+router.put('/:id', ensureAuthenticatedOrMobile, upload.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'banner', maxCount: 1 },
   { name: 'gallery', maxCount: 10 },
@@ -663,7 +664,7 @@ router.put('/:id', ensureAuthenticated, upload.fields([
 });
 
 // Delete institute (owner only)
-router.delete('/:id', ensureAuthenticated, async (req, res) => {
+router.delete('/:id', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const institute = await Institute.findById(req.params.id);
     if (!institute) {
@@ -707,7 +708,7 @@ router.get('/:id/reviews', async (req, res) => {
 });
 
 // Add a review to an institute
-router.post('/:id/reviews', ensureAuthenticated, async (req, res) => {
+router.post('/:id/reviews', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { rating, comment } = req.body;
     
@@ -763,7 +764,7 @@ router.post('/:id/reviews', ensureAuthenticated, async (req, res) => {
 });
 
 // Update a review
-router.put('/:id/reviews/:reviewId', ensureAuthenticated, async (req, res) => {
+router.put('/:id/reviews/:reviewId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { rating, comment } = req.body;
     
@@ -804,7 +805,7 @@ router.put('/:id/reviews/:reviewId', ensureAuthenticated, async (req, res) => {
 });
 
 // Delete a review
-router.delete('/:id/reviews/:reviewId', ensureAuthenticated, async (req, res) => {
+router.delete('/:id/reviews/:reviewId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const review = await Review.findById(req.params.reviewId);
     if (!review) {
@@ -842,7 +843,7 @@ router.delete('/:id/reviews/:reviewId', ensureAuthenticated, async (req, res) =>
 });
 
 // Test endpoint to debug gallery upload issues
-router.post('/:id/gallery-test', ensureAuthenticated, async (req, res) => {
+router.post('/:id/gallery-test', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('POST /gallery-test route hit');
     console.log('Authenticated user:', req.user);
@@ -854,7 +855,7 @@ router.post('/:id/gallery-test', ensureAuthenticated, async (req, res) => {
 });
 
 // Test endpoint with upload middleware
-router.post('/:id/gallery-upload-test', ensureAuthenticated, upload.array('gallery', 10), async (req, res) => {
+router.post('/:id/gallery-upload-test', ensureAuthenticatedOrMobile, upload.array('gallery', 10), async (req, res) => {
   try {
     console.log('POST /gallery-upload-test route hit');
     console.log('Authenticated user:', req.user);
@@ -873,7 +874,7 @@ router.post('/:id/gallery-upload-test', ensureAuthenticated, upload.array('galle
 module.exports = router; 
  
 // Apply Now: submit a student application with optional profile image
-router.post('/:id/apply', ensureAuthenticated, upload.single('profileImage'), async (req, res) => {
+router.post('/:id/apply', ensureAuthenticatedOrMobile, upload.single('profileImage'), async (req, res) => {
   try {
     const instituteId = req.params.id;
     const { studentName, fatherName, cnic, city, courseName, courseDuration } = req.body;
@@ -909,7 +910,7 @@ router.post('/:id/apply', ensureAuthenticated, upload.single('profileImage'), as
 });
 
 // Get current user's applications
-router.get('/:id/applications/me', ensureAuthenticated, async (req, res) => {
+router.get('/:id/applications/me', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const instituteId = req.params.id;
     const apps = await StudentApplication.find({ institute: instituteId, user: req.user._id }).sort({ createdAt: -1 });
@@ -921,7 +922,7 @@ router.get('/:id/applications/me', ensureAuthenticated, async (req, res) => {
 });
 
 // Get all applications for current user across all institutes
-router.get('/applications/my', ensureAuthenticated, async (req, res) => {
+router.get('/applications/my', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const applications = await StudentApplication.find({ user: req.user._id })
       .populate('institute', 'name logo city type')
@@ -935,7 +936,7 @@ router.get('/applications/my', ensureAuthenticated, async (req, res) => {
 });
 
 // Get all applications for an institute (admin only)
-router.get('/:id/applications', ensureAuthenticated, async (req, res) => {
+router.get('/:id/applications', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const instituteId = req.params.id;
     
@@ -961,7 +962,7 @@ router.get('/:id/applications', ensureAuthenticated, async (req, res) => {
 });
 
 // Update application status (approve/reject) - admin only
-router.put('/:id/applications/:applicationId/status', ensureAuthenticated, async (req, res) => {
+router.put('/:id/applications/:applicationId/status', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { id: instituteId, applicationId } = req.params;
     const { status } = req.body;
@@ -1003,7 +1004,7 @@ router.put('/:id/applications/:applicationId/status', ensureAuthenticated, async
 });
 
 // Notifications: create and list
-router.post('/:id/notifications', ensureAuthenticated, async (req, res) => {
+router.post('/:id/notifications', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const instituteId = req.params.id;
     const { message, title } = req.body;
@@ -1031,7 +1032,7 @@ router.get('/:id/notifications', async (req, res) => {
 });
 
 // Messages: create and list
-router.post('/:id/messages', ensureAuthenticated, async (req, res) => {
+router.post('/:id/messages', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const instituteId = req.params.id;
     const { senderName, message } = req.body;
@@ -1067,7 +1068,7 @@ const getYYYYMMDD = (date = new Date()) => {
 };
 
 // Tasks: create today's class task (owner only)
-router.post('/:id/tasks', ensureAuthenticated, async (req, res) => {
+router.post('/:id/tasks', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const instituteId = req.params.id;
     const { title, description, type, date } = req.body;
@@ -1111,7 +1112,7 @@ router.get('/:id/tasks', async (req, res) => {
 });
 
 // Tasks: list today's tasks across all institutes the current user applied to
-router.get('/tasks/my/today', ensureAuthenticated, async (req, res) => {
+router.get('/tasks/my/today', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const applications = await StudentApplication.find({ user: req.user._id }).select('institute');
     let instituteIds = [...new Set(applications.map(a => String(a.institute)))];
@@ -1141,7 +1142,7 @@ router.get('/tasks/my/today', ensureAuthenticated, async (req, res) => {
 });
 
 // Tasks: update a task (owner only)
-router.put('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
+router.put('/:id/tasks/:taskId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { id, taskId } = req.params;
     const institute = await Institute.findById(id);
@@ -1174,7 +1175,7 @@ router.put('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
 });
 
 // Tasks: delete a task (owner only)
-router.delete('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
+router.delete('/:id/tasks/:taskId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { id, taskId } = req.params;
     const institute = await Institute.findById(id);
@@ -1191,7 +1192,7 @@ router.delete('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
 });
 
 // Get notifications for all institutes the current user has applied to
-router.get('/notifications/my', ensureAuthenticated, async (req, res) => {
+router.get('/notifications/my', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const applications = await StudentApplication.find({ user: req.user._id }).select('institute');
     let instituteIds = [...new Set(applications.map(a => String(a.institute)))];
@@ -1224,7 +1225,7 @@ router.get('/notifications/my', ensureAuthenticated, async (req, res) => {
 });
 
 // Get messages for all institutes the current user has applied to
-router.get('/messages/my', ensureAuthenticated, async (req, res) => {
+router.get('/messages/my', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const applications = await StudentApplication.find({ user: req.user._id }).select('institute');
     let instituteIds = [...new Set(applications.map(a => String(a.institute)))];
@@ -1257,7 +1258,7 @@ router.get('/messages/my', ensureAuthenticated, async (req, res) => {
 });
 
 // Patient Applications: submit new patient registration (for hospitals)
-router.post('/:id/patient-apply', ensureAuthenticated, async (req, res) => {
+router.post('/:id/patient-apply', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospitalId = req.params.id;
     const { patientName, fatherName, cnic, city, department } = req.body;
@@ -1303,7 +1304,7 @@ router.post('/:id/patient-apply', ensureAuthenticated, async (req, res) => {
 });
 
 // Patient Applications: get all applications for a hospital (admin only)
-router.get('/:id/patient-applications', ensureAuthenticated, async (req, res) => {
+router.get('/:id/patient-applications', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospitalId = req.params.id;
     
@@ -1323,7 +1324,7 @@ router.get('/:id/patient-applications', ensureAuthenticated, async (req, res) =>
 });
 
 // Patient Applications: update application status (admin only)
-router.put('/:id/patient-applications/:applicationId', ensureAuthenticated, async (req, res) => {
+router.put('/:id/patient-applications/:applicationId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { id, applicationId } = req.params;
     const { status, notes } = req.body;
@@ -1362,7 +1363,7 @@ router.put('/:id/patient-applications/:applicationId', ensureAuthenticated, asyn
 });
 
 // Patient Applications: get my applications (for patients)
-router.get('/patient-applications/my', ensureAuthenticated, async (req, res) => {
+router.get('/patient-applications/my', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const applications = await PatientApplication.find({ user: req.user._id })
       .populate('hospital', 'name city type specialization')

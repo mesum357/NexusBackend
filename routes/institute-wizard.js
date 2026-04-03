@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const Institute = require('../models/Institute');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticatedOrMobile } = require('../middleware/auth');
 const { generateInstituteAgentId } = require('../utils/agentIdGenerator');
 const mongoose = require('mongoose'); // Added for MongoDB connection status check
 
 // Create institute from wizard data (JSON) - for use after payment
-router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
+router.post('/create-from-wizard', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('🏫 Institute wizard creation from JSON request received');
     console.log('🏫 Request body:', req.body);
@@ -375,7 +375,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
 });
 
 // Test endpoint to debug institute creation
-router.post('/test-institute', ensureAuthenticated, async (req, res) => {
+router.post('/test-institute', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('🧪 TEST: Creating test institute...');
 
@@ -446,7 +446,7 @@ router.post('/test-institute', ensureAuthenticated, async (req, res) => {
 });
 
 // Test endpoint with minimal required fields only
-router.post('/test-minimal', ensureAuthenticated, async (req, res) => {
+router.post('/test-minimal', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('🧪 MINIMAL TEST: Creating institute with minimal fields...');
 

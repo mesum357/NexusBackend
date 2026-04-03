@@ -77,6 +77,16 @@ const ensureAuthenticatedOrMobile = (req, res, next) => {
     });
 };
 
+/** Attach req.user from Bearer JWT when present; always calls next (for optional owner checks). */
+const optionalAttachMobileUser = (req, res, next) => {
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return next();
+  }
+  tryAttachJwtUser(req)
+    .then(() => next())
+    .catch(() => next());
+};
+
 function signMobileToken(user) {
   return jwt.sign(
     { sub: user._id.toString() },
@@ -104,6 +114,7 @@ module.exports = {
   ensureAuthenticated,
   ensureAdmin,
   ensureAuthenticatedOrMobile,
+  optionalAttachMobileUser,
   signMobileToken,
   mobileBearerOnly,
   getJwtSecret,
