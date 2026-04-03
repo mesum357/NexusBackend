@@ -3,11 +3,11 @@ const router = express.Router();
 const Order = require('../models/Order');
 const Shop = require('../models/Shop');
 const Notification = require('../models/Notification');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticated, ensureAuthenticatedOrMobile } = require('../middleware/auth');
 const { upload } = require('../middleware/cloudinary');
 
 // Place an order
-router.post('/', ensureAuthenticated, upload.single('screenshot'), async (req, res) => {
+router.post('/', ensureAuthenticatedOrMobile, upload.single('screenshot'), async (req, res) => {
   try {
     const { shopId, products, totalAmount, personalInfo, address, transactionId } = req.body;
     
