@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticated, ensureAuthenticatedOrMobile } = require('../middleware/auth');
 const PaymentRequest = require('../models/PaymentRequest');
 const Institute = require('../models/Institute');
 const Hospital = require('../models/Hospital');
@@ -9,7 +9,7 @@ const Product = require('../models/Product');
 const { upload } = require('../middleware/cloudinary');
 
 // Create a new payment request
-router.post('/create', ensureAuthenticated, upload.single('transactionScreenshot'), async (req, res) => {
+router.post('/create', ensureAuthenticatedOrMobile, upload.single('transactionScreenshot'), async (req, res) => {
   try {
     const {
       entityType,
@@ -163,7 +163,7 @@ router.get('/my', ensureAuthenticated, async (req, res) => {
 });
 
 // Link payment request to any entity (generic)
-router.put('/:transactionId/link-entity', ensureAuthenticated, async (req, res) => {
+router.put('/:transactionId/link-entity', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { transactionId } = req.params;
     const { entityId, entityType } = req.body;

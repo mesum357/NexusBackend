@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Shop = require('../models/Shop');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticated, ensureAuthenticatedOrMobile } = require('../middleware/auth');
 const { upload: cloudinaryUpload, cloudinary } = require('../middleware/cloudinary');
 const { generateShopAgentId } = require('../utils/agentIdGenerator');
 
@@ -31,7 +31,7 @@ const upload = multer({
 });
 
 // Create shop from wizard data (JSON) - for use after payment
-router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
+router.post('/create-from-wizard', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('🚀 SHOP CREATION REQUEST RECEIVED');
     console.log('📦 Request Body:', JSON.stringify(req.body, null, 2));
