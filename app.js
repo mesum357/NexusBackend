@@ -46,6 +46,7 @@ const hospitalRoutes = require('./routes/hospital');
 const hospitalWizardRoutes = require('./routes/hospital-wizard');
 const productWizardRoutes = require('./routes/product-wizard');
 const feedRoutes = require('./routes/feed');
+const mobileRoutes = require('./routes/mobile');
 const friendsRoutes = require('./routes/friends');
 const followRoutes = require('./routes/follow');
 const marketplaceRoutes = require('./routes/marketplace');
@@ -2431,6 +2432,7 @@ app.post('/api/categories/initialize-public', async function(req, res) {
   }
 });
   
+  app.use('/api/mobile', mobileRoutes);
   app.use('/api/shop', shopRoutes);
 app.use('/api/shop-wizard', shopWizardRoutes);
 app.use('/api/institute', instituteRoutes);

@@ -8,7 +8,7 @@ const Comment = require('../models/Comment');
 const Users = require('../models/User');
 const Notification = require('../models/Notification');
 
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticatedOrMobile } = require('../middleware/auth');
 
 const { upload: cloudinaryUpload, cloudinary } = require('../middleware/cloudinary');
 
@@ -21,7 +21,7 @@ const upload = multer({
 });
 
 // Create a post
-router.post('/post', ensureAuthenticated, upload.single('image'), async (req, res) => {
+router.post('/post', ensureAuthenticatedOrMobile, upload.single('image'), async (req, res) => {
   try {
     const { content, city, location, hashtags } = req.body;
     if (!content) return res.status(400).json({ error: 'Content is required' });
@@ -88,7 +88,7 @@ router.get('/post/:id', async (req, res) => {
 });
 
 // Like/unlike a post
-router.post('/post/:id/like', ensureAuthenticated, async (req, res) => {
+router.post('/post/:id/like', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'Post not found' });
@@ -119,7 +119,7 @@ router.post('/post/:id/like', ensureAuthenticated, async (req, res) => {
 });
 
 // Add a comment (or reply to a comment)
-router.post('/post/:id/comment', ensureAuthenticated, async (req, res) => {
+router.post('/post/:id/comment', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { content, parentId } = req.body;
     if (!content) return res.status(400).json({ error: 'Content is required' });
@@ -168,7 +168,7 @@ router.post('/post/:id/comment', ensureAuthenticated, async (req, res) => {
 });
 
 // Like/unlike a comment
-router.post('/comment/:id/like', ensureAuthenticated, async (req, res) => {
+router.post('/comment/:id/like', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const comment = await Comment.findById(req.params.id);
     if (!comment) return res.status(404).json({ error: 'Comment not found' });
@@ -211,7 +211,7 @@ router.get('/post/:id/comments', async (req, res) => {
 });
 
 // Delete a post (owner only)
-router.delete('/post/:id', ensureAuthenticated, async (req, res) => {
+router.delete('/post/:id', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
     if (!post) return res.status(404).json({ error: 'Post not found' })
@@ -228,7 +228,7 @@ router.delete('/post/:id', ensureAuthenticated, async (req, res) => {
 })
 
 // Delete a comment (owner only)
-router.delete('/comment/:id', ensureAuthenticated, async (req, res) => {
+router.delete('/comment/:id', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const comment = await Comment.findById(req.params.id)
     if (!comment) return res.status(404).json({ error: 'Comment not found' })
@@ -243,7 +243,7 @@ router.delete('/comment/:id', ensureAuthenticated, async (req, res) => {
 })
 
 // Edit a post (owner only)
-router.put('/post/:id', ensureAuthenticated, async (req, res) => {
+router.put('/post/:id', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
     if (!post) return res.status(404).json({ error: 'Post not found' })
@@ -266,7 +266,7 @@ router.put('/post/:id', ensureAuthenticated, async (req, res) => {
 })
 
 // Edit a comment (owner only)
-router.put('/comment/:id', ensureAuthenticated, async (req, res) => {
+router.put('/comment/:id', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const comment = await Comment.findById(req.params.id)
     if (!comment) return res.status(404).json({ error: 'Comment not found' })
@@ -289,7 +289,7 @@ router.put('/comment/:id', ensureAuthenticated, async (req, res) => {
 })
 
 // Get notifications for current user
-router.get('/notifications', ensureAuthenticated, async (req, res) => {
+router.get('/notifications', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const notifications = await Notification.find({ user: req.user._id })
       .sort({ createdAt: -1 })
@@ -303,7 +303,7 @@ router.get('/notifications', ensureAuthenticated, async (req, res) => {
 });
 
 // Mark notifications as read
-router.post('/notifications/read', ensureAuthenticated, async (req, res) => {
+router.post('/notifications/read', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     await Notification.updateMany({ user: req.user._id, isRead: false }, { isRead: true });
     res.json({ success: true });
@@ -384,7 +384,7 @@ router.get('/user/:username', async (req, res) => {
 });
 
 // Update user profile
-router.put('/profile/update', ensureAuthenticated, upload.single('profileImage'), async (req, res) => {
+router.put('/profile/update', ensureAuthenticatedOrMobile, upload.single('profileImage'), async (req, res) => {
   try {
     const userId = req.user._id;
     const { fullName, email, mobile, city, bio, website, currentPassword, newPassword } = req.body;
