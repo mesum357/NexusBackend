@@ -3,15 +3,27 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose');
 const Hospital = require('../models/Hospital');
 const Review = require('../models/Review');
 const InstituteNotification = require('../models/InstituteNotification');
 const InstituteMessage = require('../models/InstituteMessage');
 const InstituteTask = require('../models/InstituteTask');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticatedOrMobile, optionalAttachMobileUser } = require('../middleware/auth');
 const { upload, cloudinary, validateCloudinaryConfig } = require('../middleware/cloudinary');
 const { generateHospitalAgentId } = require('../utils/agentIdGenerator');
 const PatientApplication = require('../models/PatientApplication');
+const HospitalMedicalRecord = require('../models/HospitalMedicalRecord');
+const User = require('../models/User');
+
+async function generateUniqueBookingToken() {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const token = `HC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const exists = await PatientApplication.findOne({ bookingToken: token }).select('_id').lean();
+    if (!exists) return token;
+  }
+  throw new Error('Could not generate booking token');
+}
 
 // File filter for image uploads
 const fileFilter = (req, file, cb) => {
@@ -41,7 +53,7 @@ router.post('/create', (req, res, next) => {
   console.log('User authenticated:', req.isAuthenticated());
   console.log('User:', req.user);
   next();
-}, ensureAuthenticated, uploadWithFilter.fields([
+}, ensureAuthenticatedOrMobile, uploadWithFilter.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'banner', maxCount: 1 },
   { name: 'gallery', maxCount: 10 },
@@ -360,16 +372,130 @@ router.get('/all', async (req, res) => {
   }
 });
 
-// Get single hospital by ID
-router.get('/:id', async (req, res) => {
+router.get('/my-hospitals', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
+    const hospitals = await Hospital.find({ owner: req.user._id }).sort({ createdAt: -1 });
+    res.json({ hospitals });
+  } catch (error) {
+    console.error('Error fetching user hospitals:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch hospitals' });
+  }
+});
+
+router.get('/my-pending-hospitals', ensureAuthenticatedOrMobile, async (req, res) => {
+  try {
+    const pendingHospitals = await Hospital.find({
+      owner: req.user._id,
+      approvalStatus: 'pending',
+    }).sort({ createdAt: -1 });
+    res.json({ pendingHospitals });
+  } catch (error) {
+    console.error('Error fetching pending hospitals:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch pending hospitals' });
+  }
+});
+
+router.get('/specialties', async (req, res) => {
+  try {
+    const approved = await Hospital.find({ approvalStatus: 'approved' })
+      .select('departments specialization')
+      .lean();
+    const set = new Set();
+    for (const h of approved) {
+      if (h.specialization && String(h.specialization).trim()) {
+        String(h.specialization)
+          .split(/[,;|]/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .forEach((s) => set.add(s));
+      }
+      (h.departments || []).forEach((d) => {
+        if (d.name && String(d.name).trim()) set.add(String(d.name).trim());
+      });
+    }
+    res.json({ specialties: [...set].sort((a, b) => a.localeCompare(b)) });
+  } catch (error) {
+    console.error('Error fetching specialties:', error);
+    res.status(500).json({ error: 'Failed to fetch specialties' });
+  }
+});
+
+router.get('/by-specialty', async (req, res) => {
+  try {
+    const name = (req.query.name || '').trim();
+    if (!name) {
+      return res.status(400).json({ error: 'name query is required' });
+    }
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hospitals = await Hospital.find({
+      approvalStatus: 'approved',
+      $or: [
+        { 'departments.name': { $regex: new RegExp(`^${escaped}$`, 'i') } },
+        { specialization: { $regex: escaped, $options: 'i' } },
+      ],
+    })
+      .populate('owner', 'username fullName email')
+      .sort({ createdAt: -1 });
+
+    const hospitalsWithReviews = await Promise.all(
+      hospitals.map(async (hospital) => {
+        const hospitalObj = hospital.toObject();
+        const reviews = await Review.find({ entityId: hospital._id, entityType: 'hospital' });
+        const totalReviews = reviews.length;
+        let rating = 0;
+        if (totalReviews > 0) {
+          rating = parseFloat(
+            (reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1),
+          );
+        }
+        return { ...hospitalObj, rating, totalReviews };
+      }),
+    );
+
+    res.json({ hospitals: hospitalsWithReviews });
+  } catch (error) {
+    console.error('Error fetching hospitals by specialty:', error);
+    res.status(500).json({ error: 'Failed to fetch hospitals' });
+  }
+});
+
+router.get('/medical-records/my', ensureAuthenticatedOrMobile, async (req, res) => {
+  try {
+    const records = await HospitalMedicalRecord.find({ patient: req.user._id })
+      .populate('hospital', 'name city type specialization')
+      .sort({ createdAt: -1 });
+    res.json({ records });
+  } catch (error) {
+    console.error('Error fetching medical records:', error);
+    res.status(500).json({ error: 'Failed to fetch medical records' });
+  }
+});
+
+// Get single hospital by ID
+router.get('/:id', optionalAttachMobileUser, async (req, res) => {
+  try {
+    if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ error: 'Invalid hospital ID format' });
+    }
+
     console.log('🏥 Hospital detail request for ID:', req.params.id);
-    
-    const hospital = await Hospital.findById(req.params.id)
-      .populate('owner', 'username fullName email profileImage');
+
+    const hospital = await Hospital.findById(req.params.id).populate(
+      'owner',
+      'username fullName email profileImage',
+    );
 
     if (!hospital) {
       console.log('❌ Hospital not found with ID:', req.params.id);
+      return res.status(404).json({ error: 'Hospital not found' });
+    }
+
+    const user = req.user;
+    const uid = user?._id?.toString();
+    const isOwner = !!uid && String(hospital.owner) === uid;
+    const isAdmin = !!user?.isAdmin;
+
+    if (!isOwner && !isAdmin && hospital.approvalStatus !== 'approved') {
       return res.status(404).json({ error: 'Hospital not found' });
     }
 
@@ -377,7 +503,7 @@ router.get('/:id', async (req, res) => {
       id: hospital._id,
       name: hospital.name,
       approvalStatus: hospital.approvalStatus,
-      owner: hospital.owner
+      owner: hospital.owner,
     });
 
     res.json({ hospital });
@@ -388,7 +514,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Update hospital
-router.put('/:id', ensureAuthenticated, uploadWithFilter.fields([
+router.put('/:id', ensureAuthenticatedOrMobile, uploadWithFilter.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'banner', maxCount: 1 },
   { name: 'gallery', maxCount: 10 }
@@ -439,7 +565,7 @@ router.put('/:id', ensureAuthenticated, uploadWithFilter.fields([
 });
 
 // Delete hospital
-router.delete('/:id', ensureAuthenticated, async (req, res) => {
+router.delete('/:id', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     
@@ -460,21 +586,10 @@ router.delete('/:id', ensureAuthenticated, async (req, res) => {
 });
 
 // Patient Applications: submit new patient registration
-router.post('/:id/patient-application', ensureAuthenticated, async (req, res) => {
+router.post('/:id/patient-application', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospitalId = req.params.id;
-    const { patientName, patientAge, patientGender, contactNumber, emergencyContact, medicalHistory, symptoms, treatmentType, preferredDate } = req.body;
-
-    if (!patientName || !patientAge || !contactNumber || !treatmentType) {
-      return res.status(400).json({ error: 'Patient name, age, contact number, and treatment type are required' });
-    }
-
-    const hospital = await Hospital.findById(hospitalId);
-    if (!hospital) return res.status(404).json({ error: 'Hospital not found' });
-
-    const application = new PatientApplication({
-      hospital: hospitalId,
-      patient: req.user._id,
+    const {
       patientName,
       patientAge,
       patientGender,
@@ -484,11 +599,50 @@ router.post('/:id/patient-application', ensureAuthenticated, async (req, res) =>
       symptoms,
       treatmentType,
       preferredDate,
-      status: 'pending'
+      selectedDoctorName,
+      appointmentType,
+    } = req.body;
+
+    if (!patientName || patientAge === undefined || patientAge === '' || !contactNumber || !treatmentType) {
+      return res.status(400).json({ error: 'Patient name, age, contact number, and treatment type are required' });
+    }
+
+    const hospital = await Hospital.findById(hospitalId);
+    if (!hospital) return res.status(404).json({ error: 'Hospital not found' });
+    if (hospital.approvalStatus !== 'approved') {
+      return res.status(403).json({ error: 'This hospital is not accepting bookings yet' });
+    }
+
+    const gender = ['male', 'female', 'other'].includes(patientGender) ? patientGender : 'other';
+    const atype = ['online', 'physical'].includes(appointmentType) ? appointmentType : 'physical';
+    const bookingToken = await generateUniqueBookingToken();
+
+    const application = new PatientApplication({
+      hospital: hospitalId,
+      patient: req.user._id,
+      patientName,
+      patientAge: Number(patientAge),
+      patientGender: gender,
+      contactNumber,
+      emergencyContact,
+      medicalHistory,
+      symptoms,
+      treatmentType,
+      preferredDate: preferredDate ? new Date(preferredDate) : undefined,
+      selectedDoctorName: selectedDoctorName ? String(selectedDoctorName).trim() : undefined,
+      appointmentType: atype,
+      bookingToken,
+      status: 'pending',
     });
 
     await application.save();
-    res.status(201).json({ message: 'Patient application submitted successfully' });
+    const populated = await PatientApplication.findById(application._id)
+      .populate('hospital', 'name city type')
+      .populate('patient', 'username fullName email');
+    res.status(201).json({
+      message: 'Patient application submitted successfully',
+      application: populated,
+    });
   } catch (error) {
     console.error('Error submitting patient application:', error);
     res.status(500).json({ error: 'Failed to submit application' });
@@ -496,7 +650,7 @@ router.post('/:id/patient-application', ensureAuthenticated, async (req, res) =>
 });
 
 // Patient Applications: get all applications for a hospital (admin only)
-router.get('/:id/patient-applications', ensureAuthenticated, async (req, res) => {
+router.get('/:id/patient-applications', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospitalId = req.params.id;
     
@@ -516,19 +670,28 @@ router.get('/:id/patient-applications', ensureAuthenticated, async (req, res) =>
 });
 
 // Update patient application status
-router.put('/:id/patient-applications/:applicationId', ensureAuthenticated, async (req, res) => {
+router.put('/:id/patient-applications/:applicationId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { id, applicationId } = req.params;
     const { status, notes } = req.body;
+
+    const ALLOWED_STATUS = ['pending', 'approved', 'rejected', 'completed'];
+    if (status !== undefined && !ALLOWED_STATUS.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
 
     const hospital = await Hospital.findById(id);
     if (!hospital) return res.status(404).json({ error: 'Hospital not found' });
     if (String(hospital.owner) !== String(req.user._id)) return res.status(403).json({ error: 'Unauthorized' });
 
+    const update = {};
+    if (status !== undefined) update.status = status;
+    if (notes !== undefined) update.notes = notes;
+
     const application = await PatientApplication.findOneAndUpdate(
       { _id: applicationId, hospital: id },
-      { status, notes, updatedAt: new Date() },
-      { new: true }
+      { $set: update },
+      { new: true },
     ).populate('patient', 'username fullName email');
 
     if (!application) {
@@ -542,8 +705,70 @@ router.put('/:id/patient-applications/:applicationId', ensureAuthenticated, asyn
   }
 });
 
+router.get('/:id/medical-records', ensureAuthenticatedOrMobile, async (req, res) => {
+  try {
+    const hospital = await Hospital.findById(req.params.id);
+    if (!hospital) return res.status(404).json({ error: 'Hospital not found' });
+    if (String(hospital.owner) !== String(req.user._id)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const records = await HospitalMedicalRecord.find({ hospital: req.params.id })
+      .populate('patient', 'username fullName email')
+      .sort({ createdAt: -1 });
+    res.json({ records });
+  } catch (error) {
+    console.error('Error fetching hospital medical records:', error);
+    res.status(500).json({ error: 'Failed to fetch medical records' });
+  }
+});
+
+router.post(
+  '/:id/medical-records',
+  ensureAuthenticatedOrMobile,
+  uploadWithFilter.single('reportImage'),
+  async (req, res) => {
+    try {
+      const hospital = await Hospital.findById(req.params.id);
+      if (!hospital) return res.status(404).json({ error: 'Hospital not found' });
+      if (String(hospital.owner) !== String(req.user._id)) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      const { patientUserId, patientName, physicianName } = req.body;
+      if (!patientUserId || !patientName || !physicianName || !req.file?.path) {
+        return res.status(400).json({
+          error: 'patientUserId, patientName, physicianName, and report image are required',
+        });
+      }
+      if (!mongoose.Types.ObjectId.isValid(patientUserId)) {
+        return res.status(400).json({ error: 'Invalid patient user id' });
+      }
+      const patientUser = await User.findById(patientUserId).select('_id');
+      if (!patientUser) {
+        return res.status(400).json({ error: 'Patient user not found' });
+      }
+      const rec = new HospitalMedicalRecord({
+        hospital: hospital._id,
+        patient: patientUserId,
+        patientName: String(patientName).trim(),
+        physicianName: String(physicianName).trim(),
+        reportImageUrl: req.file.path,
+        createdBy: req.user._id,
+      });
+      await rec.save();
+      const populated = await HospitalMedicalRecord.findById(rec._id).populate(
+        'patient',
+        'username fullName email',
+      );
+      res.status(201).json({ record: populated });
+    } catch (error) {
+      console.error('Error creating medical record:', error);
+      res.status(500).json({ error: 'Failed to create medical record' });
+    }
+  },
+);
+
 // Get patient applications for current user
-router.get('/patient/applications', ensureAuthenticated, async (req, res) => {
+router.get('/patient/applications', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const applications = await PatientApplication.find({ patient: req.user._id })
       .populate('hospital', 'name city type specialization')
@@ -557,7 +782,7 @@ router.get('/patient/applications', ensureAuthenticated, async (req, res) => {
 });
 
 // Patient: accept/decline their own application
-router.put('/patient/applications/:applicationId/decision', ensureAuthenticated, async (req, res) => {
+router.put('/patient/applications/:applicationId/decision', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { applicationId } = req.params;
     const { decision } = req.body; // 'accepted' | 'declined'
@@ -597,7 +822,7 @@ router.get('/:id/reviews', async (req, res) => {
 });
 
 // Create hospital review
-router.post('/:id/reviews', ensureAuthenticated, async (req, res) => {
+router.post('/:id/reviews', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { rating, comment } = req.body;
     
@@ -639,7 +864,7 @@ router.get('/:id/gallery', async (req, res) => {
 });
 
 // Add image to hospital gallery
-router.post('/:id/gallery', ensureAuthenticated, uploadWithFilter.array('gallery', 10), async (req, res) => {
+router.post('/:id/gallery', ensureAuthenticatedOrMobile, uploadWithFilter.array('gallery', 10), async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     if (!hospital) {
@@ -664,7 +889,7 @@ router.post('/:id/gallery', ensureAuthenticated, uploadWithFilter.array('gallery
 });
 
 // Remove image from hospital gallery
-router.delete('/:id/gallery', ensureAuthenticated, async (req, res) => {
+router.delete('/:id/gallery', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const { imageUrl } = req.body;
     const hospital = await Hospital.findById(req.params.id);
@@ -688,7 +913,7 @@ router.delete('/:id/gallery', ensureAuthenticated, async (req, res) => {
 });
 
 // Clear all images from hospital gallery
-router.delete('/:id/gallery/clear', ensureAuthenticated, async (req, res) => {
+router.delete('/:id/gallery/clear', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     
@@ -732,7 +957,7 @@ router.get('/:id/doctors', async (req, res) => {
 });
 
 // Add doctor to hospital
-router.post('/:id/doctors', ensureAuthenticated, uploadWithFilter.single('image'), async (req, res) => {
+router.post('/:id/doctors', ensureAuthenticatedOrMobile, uploadWithFilter.single('image'), async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     if (!hospital) {
@@ -766,7 +991,7 @@ router.post('/:id/doctors', ensureAuthenticated, uploadWithFilter.single('image'
 });
 
 // Remove doctor from hospital
-router.delete('/:id/doctors/:doctorId', ensureAuthenticated, async (req, res) => {
+router.delete('/:id/doctors/:doctorId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     if (!hospital) {
@@ -801,7 +1026,7 @@ router.get('/:id/notifications', async (req, res) => {
 });
 
 // Create hospital notification
-router.post('/:id/notifications', ensureAuthenticated, async (req, res) => {
+router.post('/:id/notifications', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     if (!hospital) {
@@ -840,7 +1065,7 @@ router.get('/:id/messages', async (req, res) => {
 });
 
 // Create hospital message
-router.post('/:id/messages', ensureAuthenticated, async (req, res) => {
+router.post('/:id/messages', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     if (!hospital) {
@@ -879,7 +1104,7 @@ router.get('/:id/tasks', async (req, res) => {
 });
 
 // Create hospital task
-router.post('/:id/tasks', ensureAuthenticated, async (req, res) => {
+router.post('/:id/tasks', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     if (!hospital) {
@@ -910,7 +1135,7 @@ router.post('/:id/tasks', ensureAuthenticated, async (req, res) => {
 });
 
 // Update hospital task
-router.put('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
+router.put('/:id/tasks/:taskId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     if (!hospital) {
@@ -939,7 +1164,7 @@ router.put('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
 });
 
 // Delete hospital task
-router.delete('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
+router.delete('/:id/tasks/:taskId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const hospital = await Hospital.findById(req.params.id);
     if (!hospital) {
@@ -963,7 +1188,7 @@ router.delete('/:id/tasks/:taskId', ensureAuthenticated, async (req, res) => {
 });
 
 // Get user's hospital messages
-router.get('/messages/my', ensureAuthenticated, async (req, res) => {
+router.get('/messages/my', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const messages = await InstituteMessage.find({})
       .populate('institute', 'name')
@@ -977,7 +1202,7 @@ router.get('/messages/my', ensureAuthenticated, async (req, res) => {
 });
 
 // Get user's hospital notifications
-router.get('/notifications/my', ensureAuthenticated, async (req, res) => {
+router.get('/notifications/my', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const notifications = await InstituteNotification.find({})
       .populate('institute', 'name')
@@ -991,7 +1216,7 @@ router.get('/notifications/my', ensureAuthenticated, async (req, res) => {
 });
 
 // Get user's hospital tasks for today
-router.get('/tasks/my/today', ensureAuthenticated, async (req, res) => {
+router.get('/tasks/my/today', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

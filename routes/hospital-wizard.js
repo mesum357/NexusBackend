@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const Hospital = require('../models/Hospital');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticatedOrMobile } = require('../middleware/auth');
 const { generateHospitalAgentId } = require('../utils/agentIdGenerator');
 const mongoose = require('mongoose'); // Added for MongoDB connection status
 
 // Create hospital from wizard data (JSON) - for use after payment
-router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
+router.post('/create-from-wizard', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('🏥 Hospital wizard creation from JSON request received');
     console.log('🏥 Request body:', req.body);
@@ -337,7 +337,7 @@ router.post('/create-from-wizard', ensureAuthenticated, async (req, res) => {
 });
 
 // Test endpoint with minimal required fields only
-router.post('/test-minimal', ensureAuthenticated, async (req, res) => {
+router.post('/test-minimal', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('🧪 MINIMAL TEST: Creating hospital with minimal fields...');
 
@@ -386,7 +386,7 @@ router.post('/test-minimal', ensureAuthenticated, async (req, res) => {
 });
 
 // Test endpoint to debug hospital creation
-router.post('/test-hospital', ensureAuthenticated, async (req, res) => {
+router.post('/test-hospital', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('🧪 TEST: Creating test hospital...');
 

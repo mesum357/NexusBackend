@@ -12,6 +12,10 @@ const patientApplicationSchema = new mongoose.Schema({
   symptoms: { type: String },
   treatmentType: { type: String, required: true },
   preferredDate: { type: Date },
+  /** Human-readable token for patient (e.g. HC-XXXX) */
+  bookingToken: { type: String, unique: true, sparse: true },
+  selectedDoctorName: { type: String },
+  appointmentType: { type: String, enum: ['online', 'physical'], default: 'physical' },
   status: { type: String, enum: ['pending', 'approved', 'rejected', 'completed'], default: 'pending' },
   patientDecision: { type: String, enum: ['accepted', 'declined', 'none'], default: 'none' },
   patientDecisionAt: { type: Date },
