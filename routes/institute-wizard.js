@@ -4,6 +4,7 @@ const Institute = require('../models/Institute');
 const { ensureAuthenticatedOrMobile } = require('../middleware/auth');
 const { generateInstituteAgentId } = require('../utils/agentIdGenerator');
 const mongoose = require('mongoose'); // Added for MongoDB connection status check
+const { notifyUser } = require('../services/notifyUser');
 
 // Create institute from wizard data (JSON) - for use after payment
 router.post('/create-from-wizard', ensureAuthenticatedOrMobile, async (req, res) => {
@@ -349,6 +350,17 @@ router.post('/create-from-wizard', ensureAuthenticatedOrMobile, async (req, res)
     console.log('🏫 Initial approval status:', savedInstitute.approvalStatus);
     console.log('🏫 Institute will be visible after admin approval');
     console.log('🏫 Full saved institute data:', JSON.stringify(savedInstitute, null, 2));
+
+    try {
+      await notifyUser({
+        userId: req.user._id,
+        type: 'institute_pending',
+        message: `Your institute "${savedInstitute.name || 'Institute'}" was submitted and is pending approval.`,
+        meta: { instituteId: String(savedInstitute._id) },
+      });
+    } catch (e) {
+      console.warn('Institute pending notify:', e.message);
+    }
 
     res.status(201).json({
       success: true,

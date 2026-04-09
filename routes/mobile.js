@@ -108,4 +108,21 @@ router.get('/profile/stats', mobileBearerOnly, async (req, res) => {
   }
 });
 
+/** Register or replace Expo push token for the current user (one device). */
+router.put('/me/push-token', mobileBearerOnly, async (req, res) => {
+  try {
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+    if (!token) {
+      return res.status(400).json({ error: 'token is required' });
+    }
+    await User.updateOne(
+      { _id: req.user._id },
+      { $addToSet: { expoPushTokens: token } },
+    );
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to save push token' });
+  }
+});
+
 module.exports = router;

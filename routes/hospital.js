@@ -15,6 +15,7 @@ const { generateHospitalAgentId } = require('../utils/agentIdGenerator');
 const PatientApplication = require('../models/PatientApplication');
 const HospitalMedicalRecord = require('../models/HospitalMedicalRecord');
 const User = require('../models/User');
+const { notifyUser } = require('../services/notifyUser');
 
 async function generateUniqueBookingToken() {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -639,6 +640,19 @@ router.post('/:id/patient-application', ensureAuthenticatedOrMobile, async (req,
     const populated = await PatientApplication.findById(application._id)
       .populate('hospital', 'name city type')
       .populate('patient', 'username fullName email');
+
+    try {
+      await notifyUser({
+        userId: hospital.owner,
+        type: 'patient_application_received',
+        fromUser: req.user._id,
+        message: `New patient request for "${hospital.name}" from ${patientName}.`,
+        meta: { hospitalId: String(hospitalId), applicationId: String(application._id) },
+      });
+    } catch (e) {
+      console.warn('Patient application notify:', e.message);
+    }
+
     res.status(201).json({
       message: 'Patient application submitted successfully',
       application: populated,
@@ -696,6 +710,23 @@ router.put('/:id/patient-applications/:applicationId', ensureAuthenticatedOrMobi
 
     if (!application) {
       return res.status(404).json({ error: 'Application not found' });
+    }
+
+    if (application.patient) {
+      try {
+        await notifyUser({
+          userId: application.patient._id || application.patient,
+          type: 'patient_application_status',
+          fromUser: req.user._id,
+          message: `Your request at "${hospital.name}" was updated${status ? ` to: ${status}` : ''}.`,
+          meta: {
+            hospitalId: String(id),
+            applicationId: String(applicationId),
+          },
+        });
+      } catch (e) {
+        console.warn('Patient status notify:', e.message);
+      }
     }
 
     res.json({ application });

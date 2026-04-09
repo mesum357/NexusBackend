@@ -16,7 +16,10 @@ const instituteTaskSchema = new mongoose.Schema({
     required: true 
   },
   // Store normalized date (YYYY-MM-DD) for easy querying
-  date: { type: String, required: true, index: true }
+  // Store normalized date (YYYY-MM-DD) for easy querying
+  date: { type: String, required: true, index: true },
+  targetType: { type: String, enum: ['all', 'course', 'category', 'individual'], default: 'all' },
+  targetId: { type: String, default: '' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('InstituteTask', instituteTaskSchema);

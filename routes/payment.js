@@ -7,6 +7,7 @@ const Hospital = require('../models/Hospital');
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
 const { upload } = require('../middleware/cloudinary');
+const { notifyUser } = require('../services/notifyUser');
 
 // Create a new payment request
 router.post('/create', ensureAuthenticatedOrMobile, upload.single('transactionScreenshot'), async (req, res) => {
@@ -124,6 +125,17 @@ router.post('/create', ensureAuthenticatedOrMobile, upload.single('transactionSc
     });
 
     await paymentRequest.save();
+
+    try {
+      await notifyUser({
+        userId: req.user._id,
+        type: 'payment_pending',
+        message: `Your payment submission (${finalTransactionId}) was received and is pending verification.`,
+        meta: { paymentRequestId: String(paymentRequest._id), entityType },
+      });
+    } catch (e) {
+      console.warn('Payment pending notify:', e.message);
+    }
 
     // Populate user details for response
     await paymentRequest.populate('user', 'username email');

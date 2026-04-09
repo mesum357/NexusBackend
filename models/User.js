@@ -19,7 +19,9 @@ const userSchema = new mongoose.Schema({
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isAdmin: { type: Boolean, default: false }, // Admin role for entity approval
-  isFrozen: { type: Boolean, default: false } // User freeze status
+  isFrozen: { type: Boolean, default: false }, // User freeze status
+  // Expo push tokens for mobile device notifications (multiple devices)
+  expoPushTokens: [{ type: String }],
 }, { timestamps: true });
 
 // Add plugins

@@ -7,6 +7,7 @@ const Shop = require('../models/Shop');
 const Product = require('../models/Product');
 const PaymentRequest = require('../models/PaymentRequest');
 const User = require('../models/User');
+const { notifyUser } = require('../services/notifyUser');
 // const bcrypt = require('bcrypt'); // No longer needed
 
 // Get all pending entities for approval (no authentication required for admin panel)
@@ -85,6 +86,17 @@ router.put('/institute/:id/approval', async (req, res) => {
 
     await institute.save();
 
+    try {
+      await notifyUser({
+        userId: institute.owner,
+        type: status === 'approved' ? 'institute_approved' : 'institute_rejected',
+        message: `Your institute "${institute.name || 'Institute'}" was ${status}.${notes ? ` Note: ${notes}` : ''}`,
+        meta: { instituteId: String(institute._id) },
+      });
+    } catch (e) {
+      console.warn('Institute approval notify:', e.message);
+    }
+
     res.json({ 
       success: true, 
       message: `Institute ${status} successfully`,
@@ -120,6 +132,17 @@ router.put('/shop/:id/approval', async (req, res) => {
     console.log(`✅ Shop "${shop.shopName}" manually ${status} by admin`);
     console.log(`📝 Approval status: ${shop.approvalStatus}`);
     console.log(`📝 Approval notes: ${shop.approvalNotes}`);
+
+    try {
+      await notifyUser({
+        userId: shop.owner,
+        type: status === 'approved' ? 'shop_approved' : 'shop_rejected',
+        message: `Your shop "${shop.shopName}" was ${status}.${notes ? ` Note: ${notes}` : ''}`,
+        meta: { shopId: String(shop._id) },
+      });
+    } catch (e) {
+      console.warn('Shop approval notify:', e.message);
+    }
 
     res.json({ 
       success: true, 
@@ -157,6 +180,17 @@ router.put('/shop/approve-by-agent/:agentId', async (req, res) => {
 
     console.log(`✅ Shop "${shop.shopName}" manually approved by agentId`);
     console.log(`📝 New approval status: ${shop.approvalStatus}`);
+
+    try {
+      await notifyUser({
+        userId: shop.owner,
+        type: 'shop_approved',
+        message: `Your shop "${shop.shopName}" was approved.`,
+        meta: { shopId: String(shop._id) },
+      });
+    } catch (e) {
+      console.warn('Shop agent approval notify:', e.message);
+    }
 
     res.json({ 
       success: true, 
@@ -263,6 +297,17 @@ router.put('/hospital/:id/approval', async (req, res) => {
 
     await hospital.save();
 
+    try {
+      await notifyUser({
+        userId: hospital.owner,
+        type: status === 'approved' ? 'hospital_approved' : 'hospital_rejected',
+        message: `Your hospital "${hospital.name || 'Hospital'}" was ${status}.${notes ? ` Note: ${notes}` : ''}`,
+        meta: { hospitalId: String(hospital._id) },
+      });
+    } catch (e) {
+      console.warn('Hospital approval notify:', e.message);
+    }
+
     res.json({ 
       success: true, 
       message: `Hospital ${status} successfully`,
@@ -294,6 +339,17 @@ router.put('/product/:id/approval', async (req, res) => {
     product.approvedAt = new Date();
 
     await product.save();
+
+    try {
+      await notifyUser({
+        userId: product.owner,
+        type: status === 'approved' ? 'product_approved' : 'product_rejected',
+        message: `Your product listing was ${status}.${notes ? ` Note: ${notes}` : ''}`,
+        meta: { productId: String(product._id), shopId: product.shop ? String(product.shop) : undefined },
+      });
+    } catch (e) {
+      console.warn('Product approval notify:', e.message);
+    }
 
     res.json({ 
       success: true, 
@@ -385,6 +441,26 @@ router.put('/payment-request/:id/status', async (req, res) => {
     paymentRequest.verifiedAt = new Date();
 
     await paymentRequest.save();
+
+    try {
+      if (status === 'verified') {
+        await notifyUser({
+          userId: paymentRequest.user,
+          type: 'payment_verified',
+          message: `Your payment was verified.${verificationNotes ? ` ${verificationNotes}` : ''}`,
+          meta: { paymentRequestId: String(paymentRequest._id) },
+        });
+      } else if (status === 'rejected') {
+        await notifyUser({
+          userId: paymentRequest.user,
+          type: 'payment_rejected',
+          message: `Your payment request was rejected.${verificationNotes ? ` ${verificationNotes}` : ''}`,
+          meta: { paymentRequestId: String(paymentRequest._id) },
+        });
+      }
+    } catch (e) {
+      console.warn('Payment status notify:', e.message);
+    }
 
     // If payment is verified, automatically approve the associated entity
     if (status === 'verified') {
@@ -487,6 +563,32 @@ router.put('/payment-request/:id/status', async (req, res) => {
           const entityName = entity.name || entity.shopName || entity.hospitalName || entity.title;
           console.log(`✅ ${entityType} "${entityName}" automatically approved after payment verification`);
           console.log(`📝 New approval status: ${entity.approvalStatus}`);
+
+          try {
+            let nType = 'shop_approved';
+            const meta = {};
+            if (entityType === 'shop') {
+              nType = 'shop_approved';
+              meta.shopId = String(entity._id);
+            } else if (entityType === 'institute') {
+              nType = 'institute_approved';
+              meta.instituteId = String(entity._id);
+            } else if (entityType === 'hospital') {
+              nType = 'hospital_approved';
+              meta.hospitalId = String(entity._id);
+            } else if (entityType === 'marketplace' || entityType === 'product') {
+              nType = 'product_approved';
+              meta.productId = String(entity._id);
+            }
+            await notifyUser({
+              userId: entity.owner,
+              type: nType,
+              message: `"${entityName}" was approved after payment verification.`,
+              meta,
+            });
+          } catch (nErr) {
+            console.warn('Auto-approve notify:', nErr.message);
+          }
         } else {
           console.log(`⚠️ No ${entityType} found to auto-approve for this payment request`);
           console.log(`   - Payment Request ID: ${paymentRequest._id}`);

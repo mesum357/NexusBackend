@@ -28,6 +28,38 @@ const path = require('path');
 const socketIo = require('socket.io');
 const server = http.createServer(app);
 const io = socketIo(server);
+
+const jwtSocket = require('jsonwebtoken');
+const UserModel = require('./models/User');
+const { getJwtSecret } = require('./middleware/auth');
+const { setIO } = require('./services/socket');
+
+io.use(async (socket, next) => {
+  try {
+    const token =
+      socket.handshake.auth?.token ||
+      socket.handshake.query?.token ||
+      (typeof socket.handshake.headers?.authorization === 'string'
+        ? socket.handshake.headers.authorization.replace(/^Bearer\s+/i, '')
+        : '');
+    if (!token) return next(new Error('Unauthorized'));
+    const payload = jwtSocket.verify(token, getJwtSecret());
+    if (!payload.sub) return next(new Error('Unauthorized'));
+    const user = await UserModel.findById(payload.sub);
+    if (!user || user.isFrozen) return next(new Error('Unauthorized'));
+    socket.userId = user._id.toString();
+    next();
+  } catch (e) {
+    next(new Error('Unauthorized'));
+  }
+});
+
+io.on('connection', (socket) => {
+  socket.join(`user:${socket.userId}`);
+});
+
+setIO(io);
+
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');

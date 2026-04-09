@@ -4,6 +4,7 @@ const Hospital = require('../models/Hospital');
 const { ensureAuthenticatedOrMobile } = require('../middleware/auth');
 const { generateHospitalAgentId } = require('../utils/agentIdGenerator');
 const mongoose = require('mongoose'); // Added for MongoDB connection status
+const { notifyUser } = require('../services/notifyUser');
 
 // Create hospital from wizard data (JSON) - for use after payment
 router.post('/create-from-wizard', ensureAuthenticatedOrMobile, async (req, res) => {
@@ -320,6 +321,17 @@ router.post('/create-from-wizard', ensureAuthenticatedOrMobile, async (req, res)
     console.log('🏥 Hospital created successfully with ID:', savedHospital._id);
     console.log('🏥 Initial approval status:', savedHospital.approvalStatus);
     console.log('🏥 Hospital will be visible after admin approval');
+
+    try {
+      await notifyUser({
+        userId: req.user._id,
+        type: 'hospital_pending',
+        message: `Your hospital "${savedHospital.name || 'Hospital'}" was submitted and is pending approval.`,
+        meta: { hospitalId: String(savedHospital._id) },
+      });
+    } catch (e) {
+      console.warn('Hospital pending notify:', e.message);
+    }
 
     res.status(201).json({
       success: true,

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const Shop = require('../models/Shop');
-const Notification = require('../models/Notification');
+const { notifyUser } = require('../services/notifyUser');
 const { ensureAuthenticated, ensureAuthenticatedOrMobile } = require('../middleware/auth');
 const { upload } = require('../middleware/cloudinary');
 
@@ -36,14 +36,13 @@ router.post('/', ensureAuthenticatedOrMobile, upload.single('screenshot'), async
 
     await order.save();
 
-    // Notify the shop owner
-    const notification = new Notification({
-      user: shop.owner,
+    await notifyUser({
+      userId: shop.owner,
       type: 'order_placed',
       fromUser: req.user._id,
-      message: `You have received a new order for ${shop.shopName}!`
+      message: `You have received a new order for ${shop.shopName}!`,
+      meta: { orderId: String(order._id), shopId: String(shop._id) },
     });
-    await notification.save();
 
     res.status(201).json({ message: 'Order placed successfully', order });
   } catch (error) {
@@ -105,14 +104,13 @@ router.put('/:orderId/status', ensureAuthenticated, async (req, res) => {
 
     await order.save();
 
-    // Notify the customer
-    const notification = new Notification({
-      user: order.user,
+    await notifyUser({
+      userId: order.user,
       type: 'order_status_update',
       fromUser: req.user._id,
-      message: `Your order from ${order.shop.shopName} status has been updated to: ${orderStatus || order.orderStatus}`
+      message: `Your order from ${order.shop.shopName} status has been updated to: ${orderStatus || order.orderStatus}`,
+      meta: { orderId: String(order._id), shopId: String(order.shop._id) },
     });
-    await notification.save();
 
     res.json({ message: 'Order status updated', order });
   } catch (error) {

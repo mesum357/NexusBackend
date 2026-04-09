@@ -13,6 +13,7 @@ const InstituteNotification = require('../models/InstituteNotification');
 const InstituteMessage = require('../models/InstituteMessage');
 const InstituteTask = require('../models/InstituteTask');
 const PatientApplication = require('../models/PatientApplication');
+const { notifyUser } = require('../services/notifyUser');
 
 // File filter for image uploads
 const fileFilter = (req, file, cb) => {
@@ -902,6 +903,19 @@ router.post('/:id/apply', ensureAuthenticatedOrMobile, upload.single('profileIma
     };
 
     const application = await StudentApplication.create(applicationData);
+
+    try {
+      await notifyUser({
+        userId: institute.owner,
+        type: 'student_application_received',
+        fromUser: req.user._id,
+        message: `New student application for "${institute.name || 'your institute'}" from ${studentName}.`,
+        meta: { instituteId: String(instituteId), applicationId: String(application._id) },
+      });
+    } catch (e) {
+      console.warn('Student application notify:', e.message);
+    }
+
     return res.status(201).json({ success: true, application });
   } catch (error) {
     console.error('Error submitting application:', error);
@@ -991,6 +1005,23 @@ router.put('/:id/applications/:applicationId/status', ensureAuthenticatedOrMobil
     if (!updatedApplication) {
       return res.status(404).json({ error: 'Application not found' });
     }
+
+    if (updatedApplication.user) {
+      try {
+        await notifyUser({
+          userId: updatedApplication.user._id || updatedApplication.user,
+          type: 'student_application_status',
+          fromUser: req.user._id,
+          message: `Your application to "${institute.name || 'the institute'}" was marked as: ${status}.`,
+          meta: {
+            instituteId: String(instituteId),
+            applicationId: String(applicationId),
+          },
+        });
+      } catch (e) {
+        console.warn('Student status notify:', e.message);
+      }
+    }
     
     return res.json({ 
       success: true, 
@@ -1007,12 +1038,18 @@ router.put('/:id/applications/:applicationId/status', ensureAuthenticatedOrMobil
 router.post('/:id/notifications', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const instituteId = req.params.id;
-    const { message, title } = req.body;
+    const { message, title, targetType, targetId } = req.body;
     if (!message) return res.status(400).json({ error: 'Message is required' });
     const institute = await Institute.findById(instituteId);
     if (!institute) return res.status(404).json({ error: 'Institute not found' });
     if (String(institute.owner) !== String(req.user._id)) return res.status(403).json({ error: 'Unauthorized' });
-    const notification = await InstituteNotification.create({ institute: instituteId, message, title: title || '' });
+    const notification = await InstituteNotification.create({ 
+      institute: instituteId, 
+      message, 
+      title: title || '',
+      targetType: targetType || 'all',
+      targetId: targetId || ''
+    });
     return res.status(201).json({ success: true, notification });
   } catch (error) {
     console.error('Error creating notification:', error);
@@ -1035,12 +1072,18 @@ router.get('/:id/notifications', async (req, res) => {
 router.post('/:id/messages', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const instituteId = req.params.id;
-    const { senderName, message } = req.body;
+    const { senderName, message, targetType, targetId } = req.body;
     if (!senderName || !message) return res.status(400).json({ error: 'senderName and message are required' });
     const institute = await Institute.findById(instituteId);
     if (!institute) return res.status(404).json({ error: 'Institute not found' });
     if (String(institute.owner) !== String(req.user._id)) return res.status(403).json({ error: 'Unauthorized' });
-    const created = await InstituteMessage.create({ institute: instituteId, senderName, message });
+    const created = await InstituteMessage.create({ 
+      institute: instituteId, 
+      senderName, 
+      message,
+      targetType: targetType || 'all',
+      targetId: targetId || ''
+    });
     return res.status(201).json({ success: true, message: created });
   } catch (error) {
     console.error('Error creating message:', error);
@@ -1071,7 +1114,7 @@ const getYYYYMMDD = (date = new Date()) => {
 router.post('/:id/tasks', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const instituteId = req.params.id;
-    const { title, description, type, date } = req.body;
+    const { title, description, type, date, targetType, targetId } = req.body;
     if (!title || !description || !type) {
       return res.status(400).json({ error: 'title, description and type are required' });
     }
@@ -1087,7 +1130,9 @@ router.post('/:id/tasks', ensureAuthenticatedOrMobile, async (req, res) => {
       title: title.trim(),
       description: description.trim(),
       type: String(type).toLowerCase(),
-      date: normalizedDate
+      date: normalizedDate,
+      targetType: targetType || 'all',
+      targetId: targetId || ''
     });
     return res.status(201).json({ success: true, task: created });
   } catch (error) {

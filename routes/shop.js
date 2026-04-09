@@ -4,9 +4,10 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Shop = require('../models/Shop');
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticated, ensureAuthenticatedOrMobile } = require('../middleware/auth');
 const { upload: cloudinaryUpload, cloudinary } = require('../middleware/cloudinary');
 const { generateShopAgentId } = require('../utils/agentIdGenerator');
+const { notifyUser } = require('../services/notifyUser');
 
 // File filter for image uploads
 const fileFilter = (req, file, cb) => {
@@ -81,6 +82,14 @@ router.post('/create', ensureAuthenticated, upload.single('shopLogo'), async (re
     console.log('Creating shop with Agent ID:', shop.agentId);
 
     await shop.save();
+
+    await notifyUser({
+      userId: req.user._id,
+      type: 'shop_pending',
+      message: `Your shop "${shopName}" was submitted and is pending approval.`,
+      meta: { shopId: String(shop._id) },
+    });
+
     res.status(201).json({ 
       message: 'Shop created successfully and is pending admin approval', 
       shop 
@@ -255,7 +264,7 @@ router.get('/debug/:shopId', async (req, res) => {
 });
 
 // Get all shops owned by the current user
-router.get('/my-shops', ensureAuthenticated, async (req, res) => {
+router.get('/my-shops', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('Fetching shops for user:', req.user._id);
     const shops = await Shop.find({ owner: req.user._id });
@@ -267,7 +276,7 @@ router.get('/my-shops', ensureAuthenticated, async (req, res) => {
 });
 
 // Get pending shops for current user
-router.get('/my-pending-shops', ensureAuthenticated, async (req, res) => {
+router.get('/my-pending-shops', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     console.log('Fetching pending shops for user:', req.user._id);
     const pendingShops = await Shop.find({ 
@@ -370,7 +379,7 @@ router.get('/:shopId', async (req, res) => {
 });
 
 // Update shop
-router.put('/:shopId', ensureAuthenticated, upload.fields([
+router.put('/:shopId', ensureAuthenticatedOrMobile, upload.fields([
   { name: 'shopLogo', maxCount: 1 },
   { name: 'shopBanner', maxCount: 1 },
   { name: 'ownerProfilePhoto', maxCount: 1 }
@@ -440,7 +449,7 @@ router.put('/:shopId', ensureAuthenticated, upload.fields([
 });
 
 // Delete shop
-router.delete('/:shopId', ensureAuthenticated, async (req, res) => {
+router.delete('/:shopId', ensureAuthenticatedOrMobile, async (req, res) => {
   try {
     const shop = await Shop.findById(req.params.shopId);
     if (!shop) {
