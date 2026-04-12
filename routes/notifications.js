@@ -126,7 +126,7 @@ router.post('/welcome', ensureAuthenticatedOrMobile, async (req, res) => {
       userId: req.user._id,
       type: 'welcome',
       fromUser: admin ? admin._id : req.user._id,
-      message: `Welcome to Pakistan Online, ${req.user.fullName || req.user.username}! We're glad to have you here.`,
+      message: `Welcome to Edunia, ${req.user.fullName || req.user.username}! We're glad to have you here.`,
       scope: 'system',
     });
     res.status(201).json({ notification });

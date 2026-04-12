@@ -61,7 +61,7 @@ function titleForNotification(type) {
     hospital_pending: 'Hospital submitted',
     patient_application_received: 'New patient request',
     patient_application_status: 'Patient request update',
-    welcome: 'Welcome',
+    welcome: 'Welcome to Edunia',
   };
   return map[type] || 'Notification';
 }
