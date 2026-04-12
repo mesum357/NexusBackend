@@ -677,31 +677,50 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
 
 
 
-const frontendPublicUrl = () => (process.env.FRONTEND_URL || 'http://localhost:8080').replace(/\/$/, '');
+/** Public web app URL (verification redirect, magic links). Required in production on Render. */
+function frontendPublicUrl() {
+  const raw = process.env.FRONTEND_URL || process.env.CLIENT_URL || '';
+  const u = String(raw).trim().replace(/\/$/, '');
+  if (u) return u;
+  if (process.env.NODE_ENV !== 'production') {
+    return 'http://localhost:5173';
+  }
+  return '';
+}
 
 app.get('/verify-email', async (req, res) => {
     const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
     const base = frontendPublicUrl();
+    if (process.env.NODE_ENV === 'production' && !base) {
+        console.error('verify-email: FRONTEND_URL (or CLIENT_URL) is not set — cannot redirect to your site.');
+        return res
+            .status(500)
+            .type('html')
+            .send(
+                '<h1>Server configuration</h1><p>Add environment variable <code>FRONTEND_URL</code> on Render (e.g. <code>https://www.edunia.org</code>), then redeploy.</p>',
+            );
+    }
+    const redirectBase = base || 'http://localhost:5173';
     if (!token) {
-        return res.redirect(`${base}/login?error=${encodeURIComponent('Invalid verification link.')}`);
+        return res.redirect(`${redirectBase}/login?error=${encodeURIComponent('Invalid verification link.')}`);
     }
     try {
         const u = await User.findOne({ verificationToken: token });
         if (!u) {
             return res.redirect(
-                `${base}/login?error=${encodeURIComponent('This verification link is invalid or has already been used.')}`,
+                `${redirectBase}/login?error=${encodeURIComponent('This verification link is invalid or has already been used.')}`,
             );
         }
         u.verified = true;
         u.verificationToken = undefined;
         await u.save();
         return res.redirect(
-            `${base}/login?success=${encodeURIComponent('Your email is verified. You can sign in now.')}`,
+            `${redirectBase}/login?success=${encodeURIComponent('Your email is verified. You can sign in now.')}`,
         );
     } catch (e) {
         console.error('verify-email error:', e);
         return res.redirect(
-            `${base}/login?error=${encodeURIComponent('Verification failed. Please try again or request a new email.')}`,
+            `${redirectBase}/login?error=${encodeURIComponent('Verification failed. Please try again or request a new email.')}`,
         );
     }
 });
@@ -2331,10 +2350,29 @@ app.get('/health', (req, res) => {
 });
 
 server.listen(PORT, () => {
+  const mailOk = mailUtil.isTransactionalEmailConfigured();
+  const mailVia = process.env.RESEND_API_KEY
+    ? 'Resend'
+    : process.env.SMTP_HOST
+      ? 'SMTP'
+      : process.env.EMAIL_USER
+        ? 'Gmail/Nodemailer'
+        : 'none';
   console.log(`🚀 Server is running on port ${PORT}`);
-  console.log(`📧 Email configured: ${process.env.EMAIL_USER ? 'YES' : 'NO'}`);
+  console.log(`📧 Transactional email: ${mailOk ? 'YES' : 'NO'} (${mailVia})`);
+  if (mailOk && process.env.RESEND_API_KEY && !process.env.RESEND_FROM_EMAIL) {
+    console.log('📧 RESEND_FROM_EMAIL not set — using default from (verify domain in Resend if sends fail).');
+  }
+  const fe = (process.env.FRONTEND_URL || process.env.CLIENT_URL || '').trim();
+  if (process.env.NODE_ENV === 'production' && !fe) {
+    console.warn(
+      '⚠️  FRONTEND_URL not set — verification emails still send, but redirects after verify go nowhere useful. Set FRONTEND_URL=https://www.edunia.org (your live site, no trailing slash).',
+    );
+  } else if (fe) {
+    console.log(`🌐 FRONTEND_URL (verify redirect): ${fe}`);
+  }
   console.log(`💾 MongoDB URL: ${process.env.MONGODB_URI ? 'SET' : 'NOT SET'}`);
-  console.log(`🔗 API endpoints available at: http://localhost:${PORT}`);
+  console.log(`🔗 API listening on port ${PORT}`);
 });
 
 // Test endpoint to check entity approval status

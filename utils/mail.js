@@ -54,18 +54,31 @@ async function sendTransactionalMail(opts) {
 
   if (process.env.RESEND_API_KEY) {
     const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+    const toList = Array.isArray(to) ? to : [to].filter(Boolean);
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from, to, subject, html }),
+      body: JSON.stringify({
+        from,
+        to: toList.length === 1 ? toList[0] : toList,
+        subject,
+        html,
+      }),
     });
-    const data = await res.json().catch(() => ({}));
+    const text = await res.text();
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: text };
+    }
     if (!res.ok) {
       const msg =
-        (data && (data.message || data.error)) || res.statusText || 'Resend send failed';
+        (data && (data.message || data.name || data.error)) || text || res.statusText || 'Resend send failed';
+      console.error('Resend API error:', res.status, typeof msg === 'string' ? msg : JSON.stringify(msg));
       throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
     return data;
