@@ -1,8 +1,14 @@
 const express = require('express');
+const crypto = require('crypto');
 const passport = require('passport');
 const User = require('../models/User');
 const Order = require('../models/Order');
+const mailUtil = require('../utils/mail');
 const { signMobileToken, mobileBearerOnly } = require('../middleware/auth');
+
+function publicApiBase(req) {
+  return (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+}
 
 const router = express.Router();
 
@@ -19,6 +25,7 @@ function publicUser(u) {
     city: o.city,
     bio: o.bio,
     website: o.website,
+    verified: !!o.verified,
   };
 }
 
@@ -35,19 +42,40 @@ router.post('/auth/register', (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters long' });
   }
 
+  const emailConfigured = mailUtil.isTransactionalEmailConfigured();
+  const verificationToken = emailConfigured ? crypto.randomBytes(32).toString('hex') : undefined;
   const userData = {
     username: email,
     email,
     fullName,
     mobile,
-    verified: true,
+    verified: !emailConfigured,
+    verificationToken: emailConfigured ? verificationToken : undefined,
   };
 
-  User.register(userData, password, (err, user) => {
+  User.register(userData, password, async (err, user) => {
     if (err) {
       const msg =
         err.name === 'UserExistsError' ? 'User already exists with this email' : 'Registration failed';
       return res.status(400).json({ error: msg });
+    }
+    if (emailConfigured && user && !user.verified && verificationToken) {
+      try {
+        const verifyUrl = `${publicApiBase(req)}/verify-email?token=${verificationToken}`;
+        await mailUtil.sendTransactionalMail({
+          from: mailUtil.getDefaultFrom(),
+          to: user.email,
+          subject: 'Verify your email for E-Dunia',
+          html: mailUtil.verificationEmailHtml(user.fullName, verifyUrl),
+        });
+      } catch (e) {
+        console.error('Mobile register verification email failed:', e);
+      }
+      return res.status(201).json({
+        needsVerification: true,
+        message: 'Check your email to verify your account before signing in.',
+        user: publicUser(user),
+      });
     }
     const token = signMobileToken(user);
     return res.status(201).json({
@@ -73,6 +101,12 @@ router.post('/auth/login', (req, res, next) => {
     }
     if (user.isFrozen) {
       return res.status(403).json({ error: 'This account is frozen. Please contact support.' });
+    }
+    if (!user.verified) {
+      return res.status(403).json({
+        error: 'Please verify your email before signing in.',
+        needsVerification: true,
+      });
     }
     const token = signMobileToken(user);
     return res.status(200).json({

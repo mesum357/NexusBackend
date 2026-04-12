@@ -67,8 +67,8 @@ const passport = require('passport');
 const findOrCreate = require('mongoose-findorcreate');
 const passportLocalMongoose = require('passport-local-mongoose');
 const mongoose = require('mongoose');
-// const nodemailer = require('nodemailer'); // Disabled: nodemailer not used
 const crypto = require('crypto');
+const mailUtil = require('./utils/mail');
 const cors = require('cors');
 const shopRoutes = require('./routes/shop');
 const shopWizardRoutes = require('./routes/shop-wizard');
@@ -94,12 +94,22 @@ const { upload } = require('./middleware/cloudinary');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const LocalStrategy = require('passport-local').Strategy;
 
-// Email disabled: Skip nodemailer setup to avoid runtime email operations
+// Transactional email: Resend (RESEND_API_KEY) or Nodemailer (Gmail/SMTP)
 const transporter = {
-  sendMail: async () => {
-    return { messageId: 'email-disabled', accepted: [], rejected: [] };
-  }
+  sendMail: async (opts) => {
+    await mailUtil.sendTransactionalMail({
+      from: opts.from,
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
+    });
+    return { messageId: 'sent', accepted: [opts.to], rejected: [] };
+  },
 };
+
+function publicApiBase(req) {
+  return (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+}
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'massux357@gmail.com';
 
@@ -556,10 +566,10 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
     }
     
     console.log('✅ Validation passed at', Date.now() - startTime, 'ms');
-    
-    // Email verification disabled
-    const verificationToken = undefined;
-    
+
+    const emailConfigured = mailUtil.isTransactionalEmailConfigured();
+    const verificationToken = emailConfigured ? crypto.randomBytes(32).toString('hex') : undefined;
+
     // Prepare user data
     console.log('⏱️ Step 3: Preparing user data...');
     const userData = {
@@ -567,7 +577,8 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
         email: email,
         fullName: fullName,
         mobile: mobile,
-        verified: true
+        verified: !emailConfigured,
+        verificationToken: emailConfigured ? verificationToken : undefined,
     };
     
     // Add profile image if uploaded
@@ -630,28 +641,69 @@ app.post("/register", upload.single('profileImage'), async function(req, res) {
             hasVerificationToken: !!user.verificationToken
         });
         
-        // Email disabled: directly return success with verified user
-            const totalTime = Date.now() - startTime;
-        console.log('🎉 Registration completed (email disabled) at', totalTime, 'ms');
-            return res.status(201).json({ 
-                success: true, 
-            message: 'Registration successful!',
-                user: {
-                    id: user._id,
-                    username: user.username,
-                    email: user.email,
-                    fullName: user.fullName,
-                verified: true
+        const totalTime = Date.now() - startTime;
+
+        if (emailConfigured && user && !user.verified && verificationToken) {
+            const verifyUrl = `${publicApiBase(req)}/verify-email?token=${verificationToken}`;
+            try {
+                await transporter.sendMail({
+                    from: mailUtil.getDefaultFrom(),
+                    to: user.email,
+                    subject: 'Verify your email for E-Dunia',
+                    html: mailUtil.verificationEmailHtml(user.fullName, verifyUrl),
+                });
+                console.log('✅ Verification email sent at', totalTime, 'ms');
+            } catch (emailErr) {
+                console.error('❌ Verification email failed:', emailErr?.message || emailErr);
             }
+        }
+
+        console.log('🎉 Registration completed at', totalTime, 'ms');
+        return res.status(201).json({
+            success: true,
+            message: emailConfigured
+                ? 'Registration successful! Please check your email to verify your account.'
+                : 'Registration successful!',
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                fullName: user.fullName,
+                verified: !!user.verified,
+            },
         });
     });
 });
 
 
 
-// Email verification disabled
+const frontendPublicUrl = () => (process.env.FRONTEND_URL || 'http://localhost:8080').replace(/\/$/, '');
+
 app.get('/verify-email', async (req, res) => {
-    return res.redirect('/login?success=Email verification is disabled. You can log in now.');
+    const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
+    const base = frontendPublicUrl();
+    if (!token) {
+        return res.redirect(`${base}/login?error=${encodeURIComponent('Invalid verification link.')}`);
+    }
+    try {
+        const u = await User.findOne({ verificationToken: token });
+        if (!u) {
+            return res.redirect(
+                `${base}/login?error=${encodeURIComponent('This verification link is invalid or has already been used.')}`,
+            );
+        }
+        u.verified = true;
+        u.verificationToken = undefined;
+        await u.save();
+        return res.redirect(
+            `${base}/login?success=${encodeURIComponent('Your email is verified. You can sign in now.')}`,
+        );
+    } catch (e) {
+        console.error('verify-email error:', e);
+        return res.redirect(
+            `${base}/login?error=${encodeURIComponent('Verification failed. Please try again or request a new email.')}`,
+        );
+    }
 });
 
 // Login API route
@@ -667,7 +719,12 @@ app.post("/login", function(req, res, next) {
         if (user.isFrozen) {
             return res.status(403).json({ error: 'This account is frozen. Please contact support.' });
         }
-        // Email verification disabled: allow login regardless of verified flag
+        if (!user.verified) {
+            return res.status(403).json({
+                error: 'Please verify your email before signing in.',
+                needsVerification: true,
+            });
+        }
         req.logIn(user, function(err) {
             if (err) {
                 return res.status(500).json({ error: 'Internal server error' });
@@ -677,197 +734,49 @@ app.post("/login", function(req, res, next) {
     })(req, res, next);
 });
 
-// Resend verification email - DISABLED
 app.post('/resend-verification', async (req, res) => {
-    return res.status(200).json({ message: 'Email verification is disabled.' });
-});
-/*
-app.post('/resend-verification', async (req, res) => {
-    const startTime = Date.now();
-    console.log('🔄 RESEND VERIFICATION REQUEST RECEIVED AT:', new Date().toISOString());
-    
-    const { email } = req.body;
-    console.log('📧 Resend verification requested for email:', email);
-    
-    if (!email) {
-        console.log('❌ Resend verification failed: Email is required');
+    const { email } = req.body || {};
+    if (!email || typeof email !== 'string') {
         return res.status(400).json({ error: 'Email is required' });
     }
-    
+    const trimmed = email.trim();
     try {
-        console.log('⏱️ Step 1: Finding user in database at', Date.now() - startTime, 'ms');
-        const user = await User.findOne({ email: email });
-        
+        const user = await User.findOne({ email: trimmed });
         if (!user) {
-            console.log('❌ Resend verification failed: User not found for email:', email);
-            return res.status(404).json({ error: 'User not found' });
+            return res.status(404).json({ error: 'No account found for this email.' });
         }
-        
-        console.log('✅ User found:', { id: user._id, email: user.email, verified: user.verified });
-        
         if (user.verified) {
-            console.log('❌ Resend verification failed: Email already verified for:', email);
-            return res.status(400).json({ error: 'Email is already verified' });
+            return res.status(400).json({ error: 'This email is already verified.' });
         }
-        
-        console.log('⏱️ Step 2: Generating new verification token at', Date.now() - startTime, 'ms');
-        // Generate new verification token
-        const verificationToken = crypto.randomBytes(32).toString('hex');
-        console.log('🔑 New verification token generated:', verificationToken.substring(0, 10) + '...');
-        
-        user.verificationToken = verificationToken;
-        await user.save();
-        console.log('✅ User verification token updated and saved at', Date.now() - startTime, 'ms');
-        
-        console.log('⏱️ Step 3: Preparing verification email at', Date.now() - startTime, 'ms');
-        // Send verification email
-        const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
-        console.log('🔗 Generated verification URL:', verifyUrl);
-        
-        console.log('📧 Checking email configuration for resend...');
-        const emailService = process.env.EMAIL_SERVICE || 'gmail';
-        console.log('📧 Email service:', emailService);
-        
-        let emailConfigValid = false;
-        
-        if (emailService === 'sendgrid') {
-            emailConfigValid = !!process.env.SENDGRID_API_KEY;
-            console.log('SENDGRID_API_KEY exists:', emailConfigValid);
-        } else if (emailService === 'mailgun') {
-            emailConfigValid = !!(process.env.MAILGUN_SMTP_LOGIN && process.env.MAILGUN_SMTP_PASSWORD);
-            console.log('MAILGUN_SMTP_LOGIN exists:', !!process.env.MAILGUN_SMTP_LOGIN);
-            console.log('MAILGUN_SMTP_PASSWORD exists:', !!process.env.MAILGUN_SMTP_PASSWORD);
-        } else if (emailService === 'smtp') {
-            emailConfigValid = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-            console.log('SMTP_HOST exists:', !!process.env.SMTP_HOST);
-            console.log('SMTP_USER exists:', !!process.env.SMTP_USER);
-            console.log('SMTP_PASS exists:', !!process.env.SMTP_PASS);
-        } else {
-            // Gmail (default)
-            emailConfigValid = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
-            console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
-            console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
-        }
-        
-        console.log('Email configuration valid for resend:', emailConfigValid);
-        
-        if (emailConfigValid) {
-            console.log('✅ Email configuration found, preparing to resend email...');
-            
-            // Determine the from address based on email service
-            let fromEmail = process.env.EMAIL_USER;
-            if (emailService === 'sendgrid' || emailService === 'smtp') {
-                fromEmail = process.env.SMTP_USER || process.env.EMAIL_USER;
-            } else if (emailService === 'mailgun') {
-                fromEmail = process.env.MAILGUN_SMTP_LOGIN || process.env.EMAIL_USER;
-            }
-            
-            const emailData = {
-                from: fromEmail || 'noreply@pakistanonlines.com',
-                to: user.email,
-                subject: 'Verify your email for Pakistan Online',
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h2 style="color: #2563eb;">Email Verification - Pakistan Online</h2>
-                        <p>Hi ${user.fullName},</p>
-                        <p>Please verify your email address by clicking the button below:</p>
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Email Address</a>
-                        </div>
-                        <p>Or copy and paste this link in your browser:</p>
-                        <p style="color: #666; word-break: break-all;">${verifyUrl}</p>
-                        <p>If you didn't request this verification email, please ignore it.</p>
-                    </div>
-                `
-            };
-            
-            console.log('📤 Resending email with data:', {
-                from: emailData.from,
-                to: emailData.to,
-                subject: emailData.subject,
-                htmlLength: emailData.html.length
-            });
-            
-            const emailStartTime = Date.now();
-            
-            // Add timeout to email sending
-            const emailPromise = transporter.sendMail(emailData);
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Email timeout after 30 seconds')), 30000);
-            });
-            
-            await Promise.race([emailPromise, timeoutPromise]);
-            const emailEndTime = Date.now();
-            
-            console.log('✅ Verification email resent successfully at', Date.now() - startTime, 'ms');
-            console.log('📧 Email resend duration:', emailEndTime - emailStartTime, 'ms');
-            console.log('📮 Email resent to:', user.email);
-            
-            const totalTime = Date.now() - startTime;
-            console.log('🎉 Resend verification process completed successfully at', totalTime, 'ms');
-            
-            return res.status(200).json({ 
-                success: true, 
-                message: 'Verification email sent! Please check your inbox.',
-                debug: process.env.NODE_ENV === 'development' ? {
-                    processingTime: totalTime,
-                    emailConfigured: true
-                } : undefined
-            });
-        } else {
-            console.warn('⚠️ Email configuration missing for resend at', Date.now() - startTime, 'ms');
-            console.warn('📧 Email service:', emailService);
-            
-            // Log missing variables based on service
-            if (emailService === 'sendgrid') {
-                console.warn('Missing: SENDGRID_API_KEY');
-            } else if (emailService === 'mailgun') {
-                console.warn('Missing: MAILGUN_SMTP_LOGIN, MAILGUN_SMTP_PASSWORD');
-            } else if (emailService === 'smtp') {
-                console.warn('Missing: SMTP_HOST, SMTP_USER, SMTP_PASS');
-            } else {
-                console.warn('Missing: EMAIL_USER, EMAIL_PASS');
-            }
-            
-            // Auto-verify user if email config is missing (fallback)
+        if (!mailUtil.isTransactionalEmailConfigured()) {
             user.verified = true;
             user.verificationToken = undefined;
             await user.save();
-            console.log('✅ User auto-verified due to missing email configuration');
-            
-            return res.status(200).json({ 
-                success: true, 
-                message: 'User auto-verified (email configuration missing).',
+            return res.status(200).json({
+                success: true,
+                message: 'Email delivery is not configured; your account has been verified.',
                 verified: true,
-                debug: process.env.NODE_ENV === 'development' ? {
-                    emailService: emailService,
-                    configMissing: true
-                } : undefined
             });
         }
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        user.verificationToken = verificationToken;
+        await user.save();
+        const verifyUrl = `${publicApiBase(req)}/verify-email?token=${verificationToken}`;
+        await transporter.sendMail({
+            from: mailUtil.getDefaultFrom(),
+            to: user.email,
+            subject: 'Verify your email for E-Dunia',
+            html: mailUtil.verificationEmailHtml(user.fullName, verifyUrl),
+        });
+        return res.status(200).json({
+            success: true,
+            message: 'Verification email sent. Please check your inbox.',
+        });
     } catch (error) {
-        const errorTime = Date.now() - startTime;
-        console.error('❌ Error resending verification email at', errorTime, 'ms');
-        console.error('📧 Resend error details:', {
-            name: error.name,
-            message: error.message,
-            code: error.code,
-            command: error.command,
-            response: error.response,
-            responseCode: error.responseCode,
-            stack: error.stack?.split('\n').slice(0, 5).join('\n')
-        });
-        
-        return res.status(500).json({ 
-            error: 'Failed to send verification email. Please try again later.',
-            debug: process.env.NODE_ENV === 'development' ? {
-                processingTime: errorTime,
-                errorMessage: error.message
-            } : undefined
-        });
+        console.error('resend-verification:', error);
+        return res.status(500).json({ error: 'Failed to send verification email. Please try again later.' });
     }
 });
-*/
 
 // Fast registration endpoint (without file upload for testing)
 app.post("/register-fast", async function(req, res) {
@@ -888,17 +797,16 @@ app.post("/register-fast", async function(req, res) {
         return res.status(400).json({ error: 'Password must be at least 6 characters long' });
     }
     
-    // Generate verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    
-    // Prepare user data (no profile image)
+    const emailConfigured = mailUtil.isTransactionalEmailConfigured();
+    const verificationToken = emailConfigured ? crypto.randomBytes(32).toString('hex') : undefined;
+
     const userData = {
         username: email,
         email: email,
         fullName: fullName,
         mobile: mobile,
-        verified: false,
-        verificationToken
+        verified: !emailConfigured,
+        verificationToken: emailConfigured ? verificationToken : undefined,
     };
     
     console.log('⏱️ Starting fast User.register() at', Date.now() - startTime, 'ms');
@@ -924,145 +832,43 @@ app.post("/register-fast", async function(req, res) {
         });
         
         try {
-            console.log('⏱️ Step 5: Email verification ENABLED at', Date.now() - startTime, 'ms');
-            
-            // Send verification email
-            const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
-            console.log('🔗 Generated verification URL:', verifyUrl);
-            
-            // Check if email configuration exists
-            console.log('📧 Checking email configuration...');
-            const emailService = process.env.EMAIL_SERVICE || 'gmail';
-            console.log('📧 Email service:', emailService);
-            
-            let emailConfigValid = false;
-            
-            if (emailService === 'sendgrid') {
-                emailConfigValid = !!process.env.SENDGRID_API_KEY;
-                console.log('SENDGRID_API_KEY exists:', emailConfigValid);
-            } else if (emailService === 'mailgun') {
-                emailConfigValid = !!(process.env.MAILGUN_SMTP_LOGIN && process.env.MAILGUN_SMTP_PASSWORD);
-                console.log('MAILGUN_SMTP_LOGIN exists:', !!process.env.MAILGUN_SMTP_LOGIN);
-                console.log('MAILGUN_SMTP_PASSWORD exists:', !!process.env.MAILGUN_SMTP_PASSWORD);
-            } else if (emailService === 'smtp') {
-                emailConfigValid = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-                console.log('SMTP_HOST exists:', !!process.env.SMTP_HOST);
-                console.log('SMTP_USER exists:', !!process.env.SMTP_USER);
-                console.log('SMTP_PASS exists:', !!process.env.SMTP_PASS);
-            } else {
-                // Gmail (default)
-                emailConfigValid = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
-                console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
-                console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
-                console.log('EMAIL_USER value:', process.env.EMAIL_USER ? `${process.env.EMAIL_USER.substring(0, 3)}***` : 'not set');
-                console.log('EMAIL_PASS value:', process.env.EMAIL_PASS ? `[${process.env.EMAIL_PASS.length} chars]` : 'not set');
-            }
-            
-            console.log('All EMAIL env vars:', Object.keys(process.env).filter(key => key.includes('EMAIL')));
-            console.log('Email configuration valid:', emailConfigValid);
-            
-            if (emailConfigValid) {
-                console.log('✅ Email configuration found, preparing to send email...');
-                
-                // Determine the from address based on email service
-                let fromEmail = process.env.EMAIL_USER;
-                if (emailService === 'sendgrid' || emailService === 'smtp') {
-                    fromEmail = process.env.SMTP_USER || process.env.EMAIL_USER;
-                } else if (emailService === 'mailgun') {
-                    fromEmail = process.env.MAILGUN_SMTP_LOGIN || process.env.EMAIL_USER;
-                }
-                
-                const emailData = {
-                    from: fromEmail || 'noreply@pakistanonlines.com',
+            if (emailConfigured && verificationToken) {
+                const verifyUrl = `${publicApiBase(req)}/verify-email?token=${verificationToken}`;
+                const emailPromise = transporter.sendMail({
+                    from: mailUtil.getDefaultFrom(),
                     to: user.email,
-                    subject: 'Verify your email for Pakistan Online',
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2 style="color: #2563eb;">Welcome to Pakistan Online, ${user.fullName}!</h2>
-                            <p>Thank you for registering with Pakistan Online. Please verify your email address by clicking the button below:</p>
-                            <div style="text-align: center; margin: 30px 0;">
-                                <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Email Address</a>
-                            </div>
-                            <p>Or copy and paste this link in your browser:</p>
-                            <p style="color: #666; word-break: break-all;">${verifyUrl}</p>
-                            <p>If you didn't create an account with Pakistan Online, please ignore this email.</p>
-                        </div>
-                    `
-                };
-                
-                console.log('📤 Sending email with data:', {
-                    from: emailData.from,
-                    to: emailData.to,
-                    subject: emailData.subject,
-                    htmlLength: emailData.html.length
+                    subject: 'Verify your email for E-Dunia',
+                    html: mailUtil.verificationEmailHtml(user.fullName, verifyUrl),
                 });
-                
-                const emailStartTime = Date.now();
-                
-                // Add timeout to email sending
-                const emailPromise = transporter.sendMail(emailData);
                 const timeoutPromise = new Promise((_, reject) => {
                     setTimeout(() => reject(new Error('Email timeout after 30 seconds')), 30000);
                 });
-                
                 await Promise.race([emailPromise, timeoutPromise]);
-                const emailEndTime = Date.now();
-                
-                console.log('✅ Verification email sent successfully at', Date.now() - startTime, 'ms');
-                console.log('📧 Email send duration:', emailEndTime - emailStartTime, 'ms');
-                console.log('📮 Email sent to:', user.email);
-            } else {
-                console.warn('⚠️ Email configuration missing at', Date.now() - startTime, 'ms');
-                console.warn('📧 Email service:', emailService);
-                console.warn('❌ Cannot send verification email - environment variables not configured');
-                
-                // Log missing variables based on service
-                if (emailService === 'sendgrid') {
-                    console.warn('Missing: SENDGRID_API_KEY');
-                } else if (emailService === 'mailgun') {
-                    console.warn('Missing: MAILGUN_SMTP_LOGIN, MAILGUN_SMTP_PASSWORD');
-                } else if (emailService === 'smtp') {
-                    console.warn('Missing: SMTP_HOST, SMTP_USER, SMTP_PASS');
-                } else {
-                    console.warn('Missing: EMAIL_USER, EMAIL_PASS');
-                }
-                
-                // Log all environment variables that contain 'email' for debugging
-                const emailVars = Object.keys(process.env).filter(key => 
-                    key.toLowerCase().includes('email') || key.toLowerCase().includes('mail') || 
-                    key.toLowerCase().includes('smtp') || key.toLowerCase().includes('sendgrid')
-                );
-                console.warn('🔍 Available email-related env vars:', emailVars);
-                
-                // Auto-verify user if email config is missing (fallback)
-                user.verified = true;
-                user.verificationToken = undefined;
-                await user.save();
-                console.log('✅ User auto-verified due to missing email configuration');
             }
-            
+
             const totalTime = Date.now() - startTime;
-            console.log('🎉 Fast registration process completed successfully at', totalTime, 'ms');
-            
-            const responseMessage = emailConfigValid 
+            const responseMessage = emailConfigured
                 ? 'Registration successful! Please check your email to verify your account.'
                 : 'Registration successful! Your account has been auto-verified (email configuration missing).';
-            
-            return res.status(201).json({ 
-                success: true, 
+
+            return res.status(201).json({
+                success: true,
                 message: responseMessage,
                 user: {
                     id: user._id,
                     username: user.username,
                     email: user.email,
                     fullName: user.fullName,
-                    verified: user.verified
+                    verified: user.verified,
                 },
-                debug: process.env.NODE_ENV === 'development' ? {
-                    processingTime: totalTime,
-                    emailSent: emailConfigValid,
-                    autoVerified: !emailConfigValid
-                } : undefined
+                debug:
+                    process.env.NODE_ENV === 'development'
+                        ? {
+                              processingTime: totalTime,
+                              emailSent: emailConfigured,
+                              autoVerified: !emailConfigured,
+                          }
+                        : undefined,
             });
         } catch (emailError) {
             const errorTime = Date.now() - startTime;
@@ -1821,20 +1627,33 @@ app.post('/forgot-password', async (req, res) => {
     return res.status(400).json({ error: 'Email is required' });
   }
   const user = await User.findOne({ email });
+  const genericMsg = 'If your email is registered, you will receive a reset link shortly.';
   if (!user) {
-    // For security, always respond with success
-    return res.status(200).json({ message: 'If your email is registered, you will receive a reset link shortly.' });
+    return res.status(200).json({ message: genericMsg });
   }
-  // Generate reset token
   const resetToken = crypto.randomBytes(32).toString('hex');
   user.resetPasswordToken = resetToken;
   user.resetPasswordExpires = Date.now() + 1000 * 60 * 60; // 1 hour
   await user.save();
-  // Email disabled: expose reset token directly in response (for now)
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:8080').replace(/\/$/, '');
   const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
-  console.log('Password reset URL (email disabled):', resetUrl);
-  res.status(200).json({ message: 'Password reset link generated.', resetUrl });
+
+  if (mailUtil.isTransactionalEmailConfigured()) {
+    try {
+      await transporter.sendMail({
+        from: mailUtil.getDefaultFrom(),
+        to: user.email,
+        subject: 'Reset your E-Dunia password',
+        html: mailUtil.passwordResetEmailHtml(user.fullName, resetUrl),
+      });
+    } catch (e) {
+      console.error('forgot-password email failed:', e);
+    }
+    return res.status(200).json({ message: genericMsg });
+  }
+
+  console.log('Password reset URL (email not configured):', resetUrl);
+  return res.status(200).json({ message: 'Password reset link generated.', resetUrl });
 });
 
 // Reset Password: Update password
